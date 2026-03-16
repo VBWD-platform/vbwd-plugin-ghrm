@@ -43,6 +43,7 @@ class GhrmPlugin(BasePlugin):
 
     def get_blueprint(self) -> Optional["Blueprint"]:
         from plugins.ghrm.src.routes import ghrm_bp
+
         return ghrm_bp
 
     def get_url_prefix(self) -> Optional[str]:
@@ -67,7 +68,10 @@ class GhrmPlugin(BasePlugin):
             from plugins.ghrm.src.services.github_access_service import (
                 GithubAccessService,
             )
-            from plugins.ghrm.src.routes import _make_github_client, GithubNotConfiguredError
+            from plugins.ghrm.src.routes import (
+                _make_github_client,
+                GithubNotConfiguredError,
+            )
 
             cfg = self._config or {}
             github = _make_github_client(cfg)

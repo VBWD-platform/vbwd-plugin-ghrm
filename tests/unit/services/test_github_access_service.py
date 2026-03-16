@@ -32,7 +32,14 @@ def _make_service(
     )
 
 
-def _make_access(user_id="user-1", username="octocat", github_user_id="99", status=AccessStatus.ACTIVE, deploy_token=None, grace_expires_at=None):
+def _make_access(
+    user_id="user-1",
+    username="octocat",
+    github_user_id="99",
+    status=AccessStatus.ACTIVE,
+    deploy_token=None,
+    grace_expires_at=None,
+):
     """Build a mock GhrmUserGithubAccess-like object."""
     access = MagicMock()
     access.id = "access-id-1"
@@ -53,7 +60,14 @@ def _make_access(user_id="user-1", username="octocat", github_user_id="99", stat
     return access
 
 
-def _make_package(pkg_id="pkg-1", slug="my-pkg", owner="acme", repo="my-repo", branch="release", is_active=True):
+def _make_package(
+    pkg_id="pkg-1",
+    slug="my-pkg",
+    owner="acme",
+    repo="my-repo",
+    branch="release",
+    is_active=True,
+):
     """Build a mock GhrmSoftwarePackage-like object."""
     pkg = MagicMock()
     pkg.id = pkg_id
@@ -87,7 +101,9 @@ class TestHandleOAuthCallback:
 
         access_repo.save.side_effect = capture_save
 
-        svc = _make_service(access_repo=access_repo, package_repo=package_repo, github=github)
+        svc = _make_service(
+            access_repo=access_repo, package_repo=package_repo, github=github
+        )
         svc.handle_oauth_callback("user-1", "code-abc")
 
         assert saved_access is not None
@@ -97,7 +113,10 @@ class TestHandleOAuthCallback:
     def test_adds_collaborator_if_packages_exist(self):
         """When packages exist, add_collaborator is called for each."""
         github = MockGithubAppClient()
-        github.oauth_user_map["mock-oauth-token-code-123"] = {"login": "octocat", "id": "42"}
+        github.oauth_user_map["mock-oauth-token-code-123"] = {
+            "login": "octocat",
+            "id": "42",
+        }
 
         access_repo = MagicMock()
         access_repo.find_by_user_id.return_value = None
@@ -109,7 +128,9 @@ class TestHandleOAuthCallback:
         saved_accesses = []
         access_repo.save.side_effect = lambda a: saved_accesses.append(a) or a
 
-        svc = _make_service(access_repo=access_repo, package_repo=package_repo, github=github)
+        svc = _make_service(
+            access_repo=access_repo, package_repo=package_repo, github=github
+        )
         svc.handle_oauth_callback("user-1", "code-123")
 
         key = (pkg.github_owner, pkg.github_repo)
@@ -142,7 +163,12 @@ class TestDisconnectGithub:
 
         log_repo = MagicMock()
 
-        svc = _make_service(access_repo=access_repo, log_repo=log_repo, package_repo=package_repo, github=github)
+        svc = _make_service(
+            access_repo=access_repo,
+            log_repo=log_repo,
+            package_repo=package_repo,
+            github=github,
+        )
         svc.disconnect_github("user-1")
 
         # Collaborator removed
@@ -180,7 +206,12 @@ class TestOnSubscriptionActivated:
 
         log_repo = MagicMock()
 
-        svc = _make_service(access_repo=access_repo, log_repo=log_repo, package_repo=package_repo, github=github)
+        svc = _make_service(
+            access_repo=access_repo,
+            log_repo=log_repo,
+            package_repo=package_repo,
+            github=github,
+        )
         svc.on_subscription_activated("user-1", "plan-1")
 
         key = (pkg.github_owner, pkg.github_repo)
@@ -226,7 +257,11 @@ class TestOnSubscriptionCancelled:
         package_repo = MagicMock()
         package_repo.find_by_tariff_plan_id.return_value = None
 
-        svc = _make_service(access_repo=access_repo, package_repo=package_repo, grace_period_fallback_days=7)
+        svc = _make_service(
+            access_repo=access_repo,
+            package_repo=package_repo,
+            grace_period_fallback_days=7,
+        )
 
         before = datetime.utcnow()
         svc.on_subscription_cancelled("user-1", "plan-1", trailing_days=14)
@@ -244,7 +279,9 @@ class TestRevokeExpiredGraceAccess:
         """revoke_expired_grace_access removes collaborator, revokes token, returns count=1."""
         github = MockGithubAppClient()
 
-        access = _make_access(status=AccessStatus.GRACE, deploy_token="old-deploy-token")
+        access = _make_access(
+            status=AccessStatus.GRACE, deploy_token="old-deploy-token"
+        )
         access_repo = MagicMock()
         access_repo.find_grace_expired.return_value = [access]
 
@@ -254,7 +291,12 @@ class TestRevokeExpiredGraceAccess:
 
         log_repo = MagicMock()
 
-        svc = _make_service(access_repo=access_repo, log_repo=log_repo, package_repo=package_repo, github=github)
+        svc = _make_service(
+            access_repo=access_repo,
+            log_repo=log_repo,
+            package_repo=package_repo,
+            github=github,
+        )
         count = svc.revoke_expired_grace_access()
 
         assert count == 1
@@ -279,7 +321,12 @@ class TestOnSubscriptionRenewed:
 
         log_repo = MagicMock()
 
-        svc = _make_service(access_repo=access_repo, log_repo=log_repo, package_repo=package_repo, github=github)
+        svc = _make_service(
+            access_repo=access_repo,
+            log_repo=log_repo,
+            package_repo=package_repo,
+            github=github,
+        )
         svc.on_subscription_renewed("user-1", "plan-1")
 
         assert "old-token" in github.revoked_tokens

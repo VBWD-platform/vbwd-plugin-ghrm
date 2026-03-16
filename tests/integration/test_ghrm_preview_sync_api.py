@@ -25,6 +25,7 @@ ADMIN_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD", "AdminPass123@")
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="module")
 def backend_available():
     try:
@@ -37,9 +38,11 @@ def backend_available():
 
 @pytest.fixture(scope="module")
 def admin_token(backend_available):
-    r = requests.post(f"{BASE_URL}/auth/login",
-                      json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-                      timeout=10)
+    r = requests.post(
+        f"{BASE_URL}/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        timeout=10,
+    )
     assert r.status_code == 200, f"Admin login failed: {r.text}"
     data = r.json()
     return data.get("token") or data.get("access_token")
@@ -52,26 +55,31 @@ def auth(admin_token):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _create_plan(auth: dict, name: str) -> dict:
-    r = requests.post(f"{BASE_URL}/admin/tarif-plans",
-                      headers=auth,
-                      json={"name": name, "price": "0.00"},
-                      timeout=10)
+    r = requests.post(
+        f"{BASE_URL}/admin/tarif-plans",
+        headers=auth,
+        json={"name": name, "price": "0.00"},
+        timeout=10,
+    )
     assert r.status_code == 201, f"Plan create failed: {r.text}"
     return r.json()["plan"]
 
 
 def _create_ghrm_pkg(auth: dict, plan_id: str, slug: str) -> dict:
-    r = requests.post(f"{BASE_URL}/admin/ghrm/packages",
-                      headers=auth,
-                      json={
-                          "tariff_plan_id": plan_id,
-                          "name": f"Preview Test Pkg {slug}",
-                          "slug": slug,
-                          "github_owner": "test-org",
-                          "github_repo": slug,
-                      },
-                      timeout=10)
+    r = requests.post(
+        f"{BASE_URL}/admin/ghrm/packages",
+        headers=auth,
+        json={
+            "tariff_plan_id": plan_id,
+            "name": f"Preview Test Pkg {slug}",
+            "slug": slug,
+            "github_owner": "test-org",
+            "github_repo": slug,
+        },
+        timeout=10,
+    )
     assert r.status_code == 201, f"GHRM package create failed: {r.text}"
     return r.json()
 
@@ -81,10 +89,13 @@ def _delete_plan(auth: dict, plan_id: str) -> None:
 
 
 def _delete_ghrm_pkg(auth: dict, pkg_id: str) -> None:
-    requests.delete(f"{BASE_URL}/admin/ghrm/packages/{pkg_id}", headers=auth, timeout=10)
+    requests.delete(
+        f"{BASE_URL}/admin/ghrm/packages/{pkg_id}", headers=auth, timeout=10
+    )
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 class TestPreviewAndSyncFieldApi:
     """API contract tests for preview + sync field endpoints."""
@@ -150,7 +161,10 @@ class TestPreviewAndSyncFieldApi:
             timeout=10,
         )
         # Either 503 (no GitHub config) or 200 (credentials configured in env)
-        assert r.status_code in (200, 503), f"Unexpected status: {r.status_code} — {r.text}"
+        assert r.status_code in (
+            200,
+            503,
+        ), f"Unexpected status: {r.status_code} — {r.text}"
         if r.status_code == 503:
             assert "error" in r.json()
 
@@ -160,7 +174,10 @@ class TestPreviewAndSyncFieldApi:
             headers=auth,
             timeout=10,
         )
-        assert r.status_code in (200, 503), f"Unexpected status: {r.status_code} — {r.text}"
+        assert r.status_code in (
+            200,
+            503,
+        ), f"Unexpected status: {r.status_code} — {r.text}"
 
     # ── Response shape when GitHub IS configured ───────────────────────────────
 

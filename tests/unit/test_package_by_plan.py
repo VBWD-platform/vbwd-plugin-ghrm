@@ -5,16 +5,22 @@ from unittest.mock import MagicMock, patch
 
 # ─── Repository ──────────────────────────────────────────────────────────────
 
+
 class TestFindByTariffPlanId:
     def _make_repo(self, query_result):
         """Build a GhrmSoftwarePackageRepository with a mocked db.session."""
-        from plugins.ghrm.src.repositories.software_package_repository import GhrmSoftwarePackageRepository
+        from plugins.ghrm.src.repositories.software_package_repository import (
+            GhrmSoftwarePackageRepository,
+        )
+
         repo = GhrmSoftwarePackageRepository(session=MagicMock())
 
         mock_query = MagicMock()
         mock_query.filter_by.return_value.first.return_value = query_result
 
-        with patch("plugins.ghrm.src.repositories.software_package_repository.db") as mock_db:
+        with patch(
+            "plugins.ghrm.src.repositories.software_package_repository.db"
+        ) as mock_db:
             mock_db.session.query.return_value = mock_query
             repo._mock_db = mock_db
             repo._mock_query = mock_query
@@ -23,20 +29,28 @@ class TestFindByTariffPlanId:
         return repo, mock_db, mock_query
 
     def test_returns_none_for_invalid_uuid(self):
-        from plugins.ghrm.src.repositories.software_package_repository import GhrmSoftwarePackageRepository
+        from plugins.ghrm.src.repositories.software_package_repository import (
+            GhrmSoftwarePackageRepository,
+        )
+
         repo = GhrmSoftwarePackageRepository(session=MagicMock())
         result = repo.find_by_tariff_plan_id("not-a-uuid")
         assert result is None
 
     def test_returns_none_for_empty_string(self):
-        from plugins.ghrm.src.repositories.software_package_repository import GhrmSoftwarePackageRepository
+        from plugins.ghrm.src.repositories.software_package_repository import (
+            GhrmSoftwarePackageRepository,
+        )
+
         repo = GhrmSoftwarePackageRepository(session=MagicMock())
         result = repo.find_by_tariff_plan_id("")
         assert result is None
 
     def test_calls_db_session_query_for_valid_uuid(self):
         from uuid import UUID
-        from plugins.ghrm.src.repositories.software_package_repository import GhrmSoftwarePackageRepository
+        from plugins.ghrm.src.repositories.software_package_repository import (
+            GhrmSoftwarePackageRepository,
+        )
         from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 
         mock_pkg = MagicMock()
@@ -46,7 +60,9 @@ class TestFindByTariffPlanId:
         repo = GhrmSoftwarePackageRepository(session=MagicMock())
         valid_uuid = "12345678-1234-5678-1234-567812345678"
 
-        with patch("plugins.ghrm.src.repositories.software_package_repository.db") as mock_db:
+        with patch(
+            "plugins.ghrm.src.repositories.software_package_repository.db"
+        ) as mock_db:
             mock_db.session.query.return_value = mock_query
             result = repo.find_by_tariff_plan_id(valid_uuid)
 
@@ -55,7 +71,9 @@ class TestFindByTariffPlanId:
         assert result is mock_pkg
 
     def test_returns_none_when_not_found(self):
-        from plugins.ghrm.src.repositories.software_package_repository import GhrmSoftwarePackageRepository
+        from plugins.ghrm.src.repositories.software_package_repository import (
+            GhrmSoftwarePackageRepository,
+        )
         from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 
         mock_query = MagicMock()
@@ -64,7 +82,9 @@ class TestFindByTariffPlanId:
         repo = GhrmSoftwarePackageRepository(session=MagicMock())
         valid_uuid = "12345678-1234-5678-1234-567812345678"
 
-        with patch("plugins.ghrm.src.repositories.software_package_repository.db") as mock_db:
+        with patch(
+            "plugins.ghrm.src.repositories.software_package_repository.db"
+        ) as mock_db:
             mock_db.session.query.return_value = mock_query
             result = repo.find_by_tariff_plan_id(valid_uuid)
 
@@ -73,9 +93,13 @@ class TestFindByTariffPlanId:
 
 # ─── Service ─────────────────────────────────────────────────────────────────
 
+
 class TestGetByTariffPlanId:
     def _make_service(self, repo=None):
-        from plugins.ghrm.src.services.software_package_service import SoftwarePackageService
+        from plugins.ghrm.src.services.software_package_service import (
+            SoftwarePackageService,
+        )
+
         return SoftwarePackageService(
             package_repo=repo or MagicMock(),
             sync_repo=MagicMock(),
@@ -105,10 +129,19 @@ class TestGetByTariffPlanId:
 
 # ─── Route ───────────────────────────────────────────────────────────────────
 
+
 class TestGetPackageByPlanRoute:
     def _app(self):
         from src.app import create_app
-        return create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "RATELIMIT_ENABLED": False, "RATELIMIT_STORAGE_URL": "memory://"})
+
+        return create_app(
+            {
+                "TESTING": True,
+                "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+                "RATELIMIT_ENABLED": False,
+                "RATELIMIT_STORAGE_URL": "memory://",
+            }
+        )
 
     def test_returns_404_when_no_package(self):
         app = self._app()
@@ -118,7 +151,9 @@ class TestGetPackageByPlanRoute:
                 mock_svc.get_by_tariff_plan_id.return_value = None
                 mock_svc_factory.return_value = mock_svc
 
-                resp = client.get("/api/v1/ghrm/packages/by-plan/12345678-1234-5678-1234-567812345678")
+                resp = client.get(
+                    "/api/v1/ghrm/packages/by-plan/12345678-1234-5678-1234-567812345678"
+                )
 
         assert resp.status_code == 404
         data = resp.get_json()
@@ -129,12 +164,18 @@ class TestGetPackageByPlanRoute:
         with app.test_client() as client:
             with patch("plugins.ghrm.src.routes._pkg_svc") as mock_svc_factory:
                 mock_pkg = MagicMock()
-                mock_pkg.to_dict.return_value = {"id": "pkg-1", "slug": "my-pkg", "name": "My Package"}
+                mock_pkg.to_dict.return_value = {
+                    "id": "pkg-1",
+                    "slug": "my-pkg",
+                    "name": "My Package",
+                }
                 mock_svc = MagicMock()
                 mock_svc.get_by_tariff_plan_id.return_value = mock_pkg
                 mock_svc_factory.return_value = mock_svc
 
-                resp = client.get("/api/v1/ghrm/packages/by-plan/12345678-1234-5678-1234-567812345678")
+                resp = client.get(
+                    "/api/v1/ghrm/packages/by-plan/12345678-1234-5678-1234-567812345678"
+                )
 
         assert resp.status_code == 200
         data = resp.get_json()

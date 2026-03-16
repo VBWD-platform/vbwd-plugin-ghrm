@@ -6,8 +6,12 @@ from src.utils.datetime_utils import utcnow
 from typing import List, Dict, Any, Optional
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync
-from plugins.ghrm.src.repositories.software_package_repository import GhrmSoftwarePackageRepository
-from plugins.ghrm.src.repositories.software_sync_repository import GhrmSoftwareSyncRepository
+from plugins.ghrm.src.repositories.software_package_repository import (
+    GhrmSoftwarePackageRepository,
+)
+from plugins.ghrm.src.repositories.software_sync_repository import (
+    GhrmSoftwareSyncRepository,
+)
 from plugins.ghrm.src.services.github_app_client import IGithubAppClient
 
 
@@ -42,9 +46,17 @@ class SoftwarePackageService:
         self._github = github
         self._category_slugs = software_category_slugs or []
 
-    def list_packages(self, page: int = 1, per_page: int = 20, category_slug: Optional[str] = None, query: Optional[str] = None) -> Dict[str, Any]:
+    def list_packages(
+        self,
+        page: int = 1,
+        per_page: int = 20,
+        category_slug: Optional[str] = None,
+        query: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """List active packages, optionally filtered by category slug or search query."""
-        result = self._package_repo.find_all(page=page, per_page=per_page, category_slug=category_slug, query=query)
+        result = self._package_repo.find_all(
+            page=page, per_page=per_page, category_slug=category_slug, query=query
+        )
         result["items"] = [p.to_dict() for p in result["items"]]
         return result
 
@@ -61,11 +73,17 @@ class SoftwarePackageService:
             data["changelog"] = sync.override_changelog or sync.cached_changelog
             data["docs"] = sync.override_docs or sync.cached_docs
             data["cached_releases"] = sync.cached_releases or []
-            screenshots = list(sync.admin_screenshots or []) + list(sync.cached_screenshots or [])
+            screenshots = list(sync.admin_screenshots or []) + list(
+                sync.cached_screenshots or []
+            )
             data["screenshots"] = screenshots
             data["latest_version"] = sync.latest_version
-            data["latest_released_at"] = sync.latest_released_at.isoformat() if sync.latest_released_at else None
-            data["last_synced_at"] = sync.last_synced_at.isoformat() if sync.last_synced_at else None
+            data["latest_released_at"] = (
+                sync.latest_released_at.isoformat() if sync.latest_released_at else None
+            )
+            data["last_synced_at"] = (
+                sync.last_synced_at.isoformat() if sync.last_synced_at else None
+            )
         else:
             data["readme"] = None
             data["changelog"] = None
@@ -98,15 +116,23 @@ class SoftwarePackageService:
             return []
         return sync.cached_releases
 
-    def get_install_instructions(self, slug: str, user_id: str, deploy_token: Optional[str] = None) -> Dict[str, Any]:
+    def get_install_instructions(
+        self, slug: str, user_id: str, deploy_token: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Return install instructions for a subscriber. Raises if no active subscription."""
         pkg = self._package_repo.find_by_slug(slug)
         if not pkg:
             raise GhrmPackageNotFoundError(f"Package '{slug}' not found")
         if not deploy_token:
-            raise GhrmSubscriptionRequiredError("Active subscription and GitHub connection required")
+            raise GhrmSubscriptionRequiredError(
+                "Active subscription and GitHub connection required"
+            )
         token = deploy_token
-        owner, repo, branch = pkg.github_owner, pkg.github_repo, pkg.github_protected_branch
+        owner, repo, branch = (
+            pkg.github_owner,
+            pkg.github_repo,
+            pkg.github_protected_branch,
+        )
         return {
             "package_slug": slug,
             "deploy_token": token,
@@ -128,7 +154,9 @@ class SoftwarePackageService:
         changelog = self._github.fetch_changelog(pkg.github_owner, pkg.github_repo)
         docs = self._github.fetch_docs_readme(pkg.github_owner, pkg.github_repo)
         releases = self._github.fetch_releases(pkg.github_owner, pkg.github_repo)
-        screenshot_urls = self._github.fetch_screenshot_urls(pkg.github_owner, pkg.github_repo)
+        screenshot_urls = self._github.fetch_screenshot_urls(
+            pkg.github_owner, pkg.github_repo
+        )
 
         sync = self._sync_repo.find_by_package_id(str(pkg.id))
         if not sync:
@@ -139,7 +167,12 @@ class SoftwarePackageService:
         sync.cached_changelog = changelog
         sync.cached_docs = docs
         sync.cached_releases = [
-            {"tag": r.tag, "date": r.date, "notes": r.notes, "assets": [{"name": a.name, "url": a.url} for a in r.assets]}
+            {
+                "tag": r.tag,
+                "date": r.date,
+                "notes": r.notes,
+                "assets": [{"name": a.name, "url": a.url} for a in r.assets],
+            }
             for r in releases
         ]
         sync.cached_screenshots = [{"url": u, "caption": ""} for u in screenshot_urls]
@@ -183,7 +216,9 @@ class SoftwarePackageService:
     def sync_field(self, package_id: str, field: str) -> Dict[str, Any]:
         valid_fields = {"readme", "changelog", "screenshots"}
         if field not in valid_fields:
-            raise ValueError(f"Unknown field '{field}'. Must be one of: {', '.join(sorted(valid_fields))}")
+            raise ValueError(
+                f"Unknown field '{field}'. Must be one of: {', '.join(sorted(valid_fields))}"
+            )
         if self._github is None:
             raise GhrmNotConfiguredError("GitHub App not configured — sync unavailable")
         pkg = self._package_repo.find_by_id(package_id)
@@ -195,9 +230,13 @@ class SoftwarePackageService:
             sync = GhrmSoftwareSync(software_package_id=package_id)
 
         if field == "readme":
-            sync.cached_readme = self._github.fetch_readme(pkg.github_owner, pkg.github_repo)
+            sync.cached_readme = self._github.fetch_readme(
+                pkg.github_owner, pkg.github_repo
+            )
         elif field == "changelog":
-            sync.cached_changelog = self._github.fetch_changelog(pkg.github_owner, pkg.github_repo)
+            sync.cached_changelog = self._github.fetch_changelog(
+                pkg.github_owner, pkg.github_repo
+            )
         elif field == "screenshots":
             urls = self._github.fetch_screenshot_urls(pkg.github_owner, pkg.github_repo)
             sync.cached_screenshots = [{"url": u, "caption": ""} for u in urls]

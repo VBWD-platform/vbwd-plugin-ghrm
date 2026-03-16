@@ -29,11 +29,12 @@ from uuid import uuid4
 
 
 BASE_URL = os.getenv("API_BASE_URL", "http://localhost:5000/api/v1")
-ADMIN_EMAIL    = os.getenv("TEST_ADMIN_EMAIL",    "admin@example.com")
+ADMIN_EMAIL = os.getenv("TEST_ADMIN_EMAIL", "admin@example.com")
 ADMIN_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD", "AdminPass123@")
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def backend_available():
@@ -63,6 +64,7 @@ def auth(admin_token):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _create_plan(auth, name):
     r = requests.post(
@@ -97,7 +99,9 @@ def _create_ghrm_pkg(auth, plan_id, slug, owner="dantweb", repo="vbwd-backend"):
 
 
 def _delete_ghrm_pkg(auth, pkg_id):
-    requests.delete(f"{BASE_URL}/admin/ghrm/packages/{pkg_id}", headers=auth, timeout=10)
+    requests.delete(
+        f"{BASE_URL}/admin/ghrm/packages/{pkg_id}", headers=auth, timeout=10
+    )
 
 
 def _trigger_sync(slug, sync_api_key):
@@ -117,6 +121,7 @@ def _get_package_detail(slug):
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
+
 class TestSyncPopulatesTabsViaApi:
     """After triggering sync, Overview and Changelog tabs receive content."""
 
@@ -127,14 +132,14 @@ class TestSyncPopulatesTabsViaApi:
         slug = f"vbwd-backend-{uid}"
 
         self.plan = _create_plan(auth, f"VBWD Backend Test {uid}")
-        self.pkg  = _create_ghrm_pkg(
+        self.pkg = _create_ghrm_pkg(
             auth,
             plan_id=self.plan["id"],
             slug=slug,
             owner="dantweb",
             repo=f"vbwd-backend-{uid}",
         )
-        self.slug         = slug
+        self.slug = slug
         self.sync_api_key = self.pkg.get("sync_api_key")
 
         yield
@@ -147,24 +152,25 @@ class TestSyncPopulatesTabsViaApi:
         r = _get_package_detail(self.slug)
         assert r.status_code == 200, r.text
         data = r.json()
-        assert data.get("readme") is None, (
-            "Before sync, readme must be None — Overview tab should show empty state"
-        )
+        assert (
+            data.get("readme") is None
+        ), "Before sync, readme must be None — Overview tab should show empty state"
 
     def test_sync_endpoint_accepts_valid_api_key(self):
         """POST /api/v1/ghrm/sync with the package's sync_api_key returns 200."""
         assert self.sync_api_key, "Package must have a sync_api_key"
         r = _trigger_sync(self.slug, self.sync_api_key)
-        assert r.status_code == 200, (
-            f"Sync endpoint failed with {r.status_code}: {r.text}"
-        )
+        assert (
+            r.status_code == 200
+        ), f"Sync endpoint failed with {r.status_code}: {r.text}"
 
     def test_sync_endpoint_rejects_invalid_api_key(self):
         """POST /api/v1/ghrm/sync with a wrong key returns 401 or 403."""
         r = _trigger_sync(self.slug, "definitely-wrong-key")
-        assert r.status_code in (401, 403), (
-            f"Expected 401/403 for bad sync key, got {r.status_code}"
-        )
+        assert r.status_code in (
+            401,
+            403,
+        ), f"Expected 401/403 for bad sync key, got {r.status_code}"
 
     def test_overview_tab_populated_after_sync(self):
         """After sync, GET /packages/<slug> returns non-null 'readme' (Overview tab)."""
@@ -174,12 +180,10 @@ class TestSyncPopulatesTabsViaApi:
         assert r.status_code == 200, r.text
         data = r.json()
 
-        assert data.get("readme") is not None, (
-            "After sync, 'readme' must not be None — Overview tab should show README.md content"
-        )
-        assert len(data["readme"]) > 0, (
-            "readme content must not be empty after sync"
-        )
+        assert (
+            data.get("readme") is not None
+        ), "After sync, 'readme' must not be None — Overview tab should show README.md content"
+        assert len(data["readme"]) > 0, "readme content must not be empty after sync"
 
     def test_changelog_tab_populated_after_sync(self):
         """After sync, GET /packages/<slug> returns non-null 'changelog' (Changelog tab)."""
@@ -189,12 +193,12 @@ class TestSyncPopulatesTabsViaApi:
         assert r.status_code == 200, r.text
         data = r.json()
 
-        assert data.get("changelog") is not None, (
-            "After sync, 'changelog' must not be None — Changelog tab should show CHANGELOG.md content"
-        )
-        assert len(data["changelog"]) > 0, (
-            "changelog content must not be empty after sync"
-        )
+        assert (
+            data.get("changelog") is not None
+        ), "After sync, 'changelog' must not be None — Changelog tab should show CHANGELOG.md content"
+        assert (
+            len(data["changelog"]) > 0
+        ), "changelog content must not be empty after sync"
 
     def test_both_tabs_populated_in_single_sync(self):
         """A single sync call populates both Overview and Changelog tabs simultaneously."""
@@ -204,8 +208,10 @@ class TestSyncPopulatesTabsViaApi:
         assert r.status_code == 200, r.text
         data = r.json()
 
-        assert data.get("readme") is not None,    "Overview tab (readme) must be populated"
-        assert data.get("changelog") is not None, "Changelog tab (changelog) must be populated"
+        assert data.get("readme") is not None, "Overview tab (readme) must be populated"
+        assert (
+            data.get("changelog") is not None
+        ), "Changelog tab (changelog) must be populated"
 
     def test_package_detail_response_shape(self):
         """GET /packages/<slug> returns all tab-related fields in the response."""
@@ -217,9 +223,9 @@ class TestSyncPopulatesTabsViaApi:
 
         tab_fields = ["readme", "changelog", "docs", "screenshots", "cached_releases"]
         for field in tab_fields:
-            assert field in data, (
-                f"Field '{field}' must be present in package detail response (used by tabs)"
-            )
+            assert (
+                field in data
+            ), f"Field '{field}' must be present in package detail response (used by tabs)"
 
     def test_re_sync_updates_content(self):
         """Calling sync twice does not break anything — second sync overwrites cached content."""
@@ -242,9 +248,9 @@ class TestSyncPopulatesTabsViaApi:
         assert r.status_code == 200, r.text
         data = r.json()
 
-        assert data.get("last_synced_at") is not None, (
-            "last_synced_at must be set after sync — admin UI shows this timestamp"
-        )
+        assert (
+            data.get("last_synced_at") is not None
+        ), "last_synced_at must be set after sync — admin UI shows this timestamp"
 
     def test_latest_version_set_after_sync_with_releases(self):
         """After sync with releases, latest_version is non-null (shown in package header badge)."""
@@ -256,9 +262,9 @@ class TestSyncPopulatesTabsViaApi:
 
         # MockGithubAppClient returns [] for releases by default, so latest_version may be None.
         # This test just verifies the field exists and the shape is correct.
-        assert "latest_version" in data, (
-            "latest_version must be a field in the package detail response"
-        )
+        assert (
+            "latest_version" in data
+        ), "latest_version must be a field in the package detail response"
 
 
 class TestSyncGithubRepoContentMapping:
@@ -278,7 +284,7 @@ class TestSyncGithubRepoContentMapping:
         uid = uuid4().hex[:8]
         self.slug = f"sync-map-test-{uid}"
         self.plan = _create_plan(auth, f"Sync Map Test {uid}")
-        self.pkg  = _create_ghrm_pkg(
+        self.pkg = _create_ghrm_pkg(
             auth,
             plan_id=self.plan["id"],
             slug=self.slug,

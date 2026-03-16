@@ -24,13 +24,22 @@ def _fake_admin_user():
 def _auth_patches():
     """Return context managers that bypass require_auth + require_admin."""
     return [
-        patch("src.services.auth_service.AuthService.verify_token", return_value=_FAKE_USER_ID),
-        patch("src.repositories.user_repository.UserRepository.find_by_id", return_value=_fake_admin_user()),
+        patch(
+            "src.services.auth_service.AuthService.verify_token",
+            return_value=_FAKE_USER_ID,
+        ),
+        patch(
+            "src.repositories.user_repository.UserRepository.find_by_id",
+            return_value=_fake_admin_user(),
+        ),
     ]
 
 
 def _admin_headers():
-    return {"Authorization": f"Bearer {_FAKE_TOKEN}", "Content-Type": "application/json"}
+    return {
+        "Authorization": f"Bearer {_FAKE_TOKEN}",
+        "Content-Type": "application/json",
+    }
 
 
 # ─── App factory ─────────────────────────────────────────────────────────────
@@ -64,7 +73,9 @@ def _default_widgets():
 class TestGetWidgetsPublic:
     def test_returns_200_with_widgets_list(self, app):
         with app.test_client() as c:
-            with patch("plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()):
+            with patch(
+                "plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()
+            ):
                 resp = c.get("/api/v1/ghrm/widgets")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -73,7 +84,9 @@ class TestGetWidgetsPublic:
 
     def test_returns_both_catalogue_and_detail_widgets(self, app):
         with app.test_client() as c:
-            with patch("plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()):
+            with patch(
+                "plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()
+            ):
                 resp = c.get("/api/v1/ghrm/widgets")
         widgets = {w["id"]: w for w in resp.get_json()["widgets"]}
         assert "catalogue" in widgets
@@ -81,15 +94,27 @@ class TestGetWidgetsPublic:
 
     def test_widget_has_required_fields(self, app):
         with app.test_client() as c:
-            with patch("plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()):
+            with patch(
+                "plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()
+            ):
                 resp = c.get("/api/v1/ghrm/widgets")
         widget = resp.get_json()["widgets"][0]
-        for field in ("id", "separator", "root_name", "root_slug", "show_category", "max_label_length", "css"):
+        for field in (
+            "id",
+            "separator",
+            "root_name",
+            "root_slug",
+            "show_category",
+            "max_label_length",
+            "css",
+        ):
             assert field in widget, f"Missing field: {field}"
 
     def test_default_separator_is_slash(self, app):
         with app.test_client() as c:
-            with patch("plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()):
+            with patch(
+                "plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()
+            ):
                 resp = c.get("/api/v1/ghrm/widgets")
         for w in resp.get_json()["widgets"]:
             assert w["separator"] == "/"
@@ -97,7 +122,9 @@ class TestGetWidgetsPublic:
     def test_no_auth_required(self, app):
         """Public endpoint — no Authorization header needed."""
         with app.test_client() as c:
-            with patch("plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()):
+            with patch(
+                "plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()
+            ):
                 resp = c.get("/api/v1/ghrm/widgets")
         assert resp.status_code == 200
 
@@ -110,7 +137,10 @@ class TestAdminGetWidgets:
         patches = _auth_patches()
         with app.test_client() as c:
             with patches[0], patches[1]:
-                with patch("plugins.ghrm.src.routes._load_widgets", return_value=_default_widgets()):
+                with patch(
+                    "plugins.ghrm.src.routes._load_widgets",
+                    return_value=_default_widgets(),
+                ):
                     resp = c.get("/api/v1/admin/ghrm/widgets", headers=_admin_headers())
         assert resp.status_code == 200
         data = resp.get_json()
@@ -137,7 +167,9 @@ class TestAdminUpdateWidget:
         patches = _auth_patches()
         with app.test_client() as c:
             with patches[0], patches[1]:
-                with patch("plugins.ghrm.src.routes._load_widgets", return_value=storage), patch(
+                with patch(
+                    "plugins.ghrm.src.routes._load_widgets", return_value=storage
+                ), patch(
                     "plugins.ghrm.src.routes._save_widgets", side_effect=fake_save
                 ):
                     return c.put(

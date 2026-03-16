@@ -14,7 +14,7 @@ import json
 import os
 from decimal import Decimal
 
-sys.path.insert(0, '/app')
+sys.path.insert(0, "/app")
 
 from src.extensions import Session
 from src.models.tarif_plan import TarifPlan
@@ -25,7 +25,9 @@ from src.models.currency import Currency
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync
 from plugins.cms.src.models.cms_category import CmsCategory
-from plugins.cms.src.models.cms_style import CmsStyle  # noqa: F401 — required for FK resolution
+from plugins.cms.src.models.cms_style import (
+    CmsStyle,
+)  # noqa: F401 — required for FK resolution
 from plugins.cms.src.models.cms_layout import CmsLayout
 from plugins.cms.src.models.cms_widget import CmsWidget
 from plugins.cms.src.models.cms_page import CmsPage
@@ -33,17 +35,24 @@ from plugins.cms.src.models.cms_layout_widget import CmsLayoutWidget
 
 # ── Load plugin config to get category slugs ────────────────────────────────
 
-_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'config.json')
+_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config.json")
 with open(_CONFIG_PATH) as _f:
     _plugin_cfg = json.load(_f)
 
-CATEGORY_SLUGS: list[str] = _plugin_cfg.get("software_category_slugs", ["backend", "fe-user", "fe-admin"])
+CATEGORY_SLUGS: list[str] = _plugin_cfg.get(
+    "software_category_slugs", ["backend", "fe-user", "fe-admin"]
+)
 CATALOGUE_LAYOUT_SLUG: str = "ghrm-software-catalogue"
 DETAIL_LAYOUT_SLUG: str = "ghrm-software-detail"
-CATALOGUE_PAGE_SLUG: str = _plugin_cfg.get("software_catalogue_cms_page_slug", "ghrm-software-catalogue")
-DETAIL_PAGE_SLUG: str = _plugin_cfg.get("software_detail_cms_page_slug", "ghrm-software-detail")
+CATALOGUE_PAGE_SLUG: str = _plugin_cfg.get(
+    "software_catalogue_cms_page_slug", "ghrm-software-catalogue"
+)
+DETAIL_PAGE_SLUG: str = _plugin_cfg.get(
+    "software_detail_cms_page_slug", "ghrm-software-detail"
+)
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def slug_to_label(slug: str) -> str:
     """Convert a slug like 'fe-user' → 'Fe User'."""
@@ -85,7 +94,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "vbwd-plugin-stripe",
         "pkg_name": "Stripe",
         "description": "Accept credit card payments via Stripe. Includes webhook handling, "
-                       "subscription sync, and a pre-built checkout UI widget.",
+        "subscription sync, and a pre-built checkout UI widget.",
         "github_owner": "VBWD-platform",
         "github_repo": "vbwd-plugin-stripe",
         "author_name": "VBWD-platform",
@@ -99,7 +108,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "vbwd-plugin-paypal",
         "pkg_name": "PayPal",
         "description": "PayPal Checkout and Subscriptions integration. Supports one-time "
-                       "payments and recurring billing with automatic invoice generation.",
+        "payments and recurring billing with automatic invoice generation.",
         "github_owner": "VBWD-platform",
         "github_repo": "vbwd-plugin-paypal",
         "author_name": "VBWD-platform",
@@ -113,7 +122,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "vbwd-fe-user-plugin-theme-switcher",
         "pkg_name": "Theme-Switcher",
         "description": "Light / dark / system theme toggle for the vbwd user frontend. "
-                       "Persists user preference in localStorage, zero-flash on reload.",
+        "Persists user preference in localStorage, zero-flash on reload.",
         "github_owner": "VBWD-platform",
         "github_repo": "vbwd-fe-user-plugin-theme-switcher",
         "author_name": "VBWD-platform",
@@ -127,7 +136,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "vbwd-fe-user-plugin-chat",
         "pkg_name": "LLM Chat",
         "description": "Embeddable AI chat widget backed by any OpenAI-compatible endpoint. "
-                       "Supports streaming, conversation history, and custom system prompts.",
+        "Supports streaming, conversation history, and custom system prompts.",
         "github_owner": "VBWD-platform",
         "github_repo": "vbwd-fe-user-plugin-chat",
         "author_name": "VBWD-platform",
@@ -141,7 +150,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "vbwd-plugin-taro",
         "pkg_name": "AI Tarot",
         "description": "Full-stack Tarot reading plugin with all 78 Rider-Waite cards, "
-                       "AI-generated interpretations, and a beautiful animated flip UI.",
+        "AI-generated interpretations, and a beautiful animated flip UI.",
         "github_owner": "VBWD-platform",
         "github_repo": "vbwd-plugin-taro",
         "author_name": "VBWD-platform",
@@ -155,7 +164,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "vbwd-plugin-import-export",
         "pkg_name": "Import-Export",
         "description": "Bulk data import and export for users, subscriptions, and invoices. "
-                       "Supports CSV, JSON, and XLSX with column mapping and dry-run preview.",
+        "Supports CSV, JSON, and XLSX with column mapping and dry-run preview.",
         "github_owner": "VBWD-platform",
         "github_repo": "vbwd-plugin-import-export",
         "author_name": "VBWD-platform",
@@ -169,7 +178,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "vbwd-fe-admin-plugin-analytics-widget",
         "pkg_name": "Analytics",
         "description": "Advanced analytics dashboard with MRR, ARR, churn, ARPU, "
-                       "and cohort retention charts. Exports to CSV for further analysis.",
+        "and cohort retention charts. Exports to CSV for further analysis.",
         "github_owner": "VBWD-platform",
         "github_repo": "vbwd-fe-admin-plugin-analytics-widget",
         "author_name": "VBWD-platform",
@@ -184,7 +193,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "vbwd-plugin-ghrm",
         "pkg_name": "GitHub Repo Manager",
         "description": "Subscription-gated software distribution via GitHub Releases. "
-                       "Buyers get a deploy token; GitHub Actions pushes releases automatically.",
+        "Buyers get a deploy token; GitHub Actions pushes releases automatically.",
         "github_owner": "VBWD-platform",
         "github_repo": "vbwd-plugin-ghrm",
         "author_name": "VBWD-platform",
@@ -199,7 +208,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "lensforge",
         "pkg_name": "LensForge",
         "description": "Pluggable Python AI vision microservice SDK. Build modular "
-                       "computer-vision pipelines with interchangeable detector and classifier nodes.",
+        "computer-vision pipelines with interchangeable detector and classifier nodes.",
         "github_owner": "dantweb",
         "github_repo": "lensforge",
         "author_name": "dantweb",
@@ -213,7 +222,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "loopai-core",
         "pkg_name": "LoopAI Core",
         "description": "Python orchestration core for AI agent workflows. "
-                       "Define multi-step agent loops with tool calling, retry logic, and state machines.",
+        "Define multi-step agent loops with tool calling, retry logic, and state machines.",
         "github_owner": "dantweb",
         "github_repo": "loopai-core",
         "author_name": "dantweb",
@@ -227,7 +236,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "loopai-view",
         "pkg_name": "LoopAI View",
         "description": "Vue.js UI module for LoopAI — ready-made agent dashboards, "
-                       "chat threads, tool-call inspector, and real-time progress indicators.",
+        "chat threads, tool-call inspector, and real-time progress indicators.",
         "github_owner": "dantweb",
         "github_repo": "loopai-view",
         "author_name": "dantweb",
@@ -241,7 +250,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "agent-post",
         "pkg_name": "Agent Post",
         "description": "AI agent for automated content scheduling and social-media publishing. "
-                       "Supports Twitter/X, LinkedIn, Telegram, and custom webhooks.",
+        "Supports Twitter/X, LinkedIn, Telegram, and custom webhooks.",
         "github_owner": "dantweb",
         "github_repo": "agent_post",
         "author_name": "dantweb",
@@ -255,7 +264,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "oxid-shop-watch",
         "pkg_name": "OXID Shop Watch",
         "description": "E2E testing API for OXID eShop 7.4+. Trigger full smoke-test "
-                       "suites via HTTP, get structured pass/fail results, and receive Slack alerts.",
+        "suites via HTTP, get structured pass/fail results, and receive Slack alerts.",
         "github_owner": "dantweb",
         "github_repo": "oxid-shop-watch",
         "author_name": "dantweb",
@@ -269,7 +278,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "ecwatch-core",
         "pkg_name": "ECWatch Core",
         "description": "E-commerce monitoring engine — tracks price changes, stock levels, "
-                       "and uptime across multiple shops. Fires webhooks on detected changes.",
+        "and uptime across multiple shops. Fires webhooks on detected changes.",
         "github_owner": "dantweb",
         "github_repo": "ecwatch-core",
         "author_name": "dantweb",
@@ -283,7 +292,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "ecwatch-web",
         "pkg_name": "ECWatch Web",
         "description": "Real-time web dashboard for ECWatch Core. "
-                       "Visualise price history charts, stock alerts, and uptime timelines for any shop.",
+        "Visualise price history charts, stock alerts, and uptime timelines for any shop.",
         "github_owner": "dantweb",
         "github_repo": "ecwatch-web",
         "author_name": "dantweb",
@@ -297,7 +306,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "oxid-devchat",
         "pkg_name": "OXID DevChat",
         "description": "AI-powered developer assistant for OXID eShop. Ask questions about "
-                       "module APIs, get code snippets, and debug Symfony container issues in plain English.",
+        "module APIs, get code snippets, and debug Symfony container issues in plain English.",
         "github_owner": "dantweb",
         "github_repo": "oxid-devchat",
         "author_name": "dantweb",
@@ -311,7 +320,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "wp-post2md",
         "pkg_name": "WP Post2MD",
         "description": "WordPress plugin that exports posts and pages to Markdown files "
-                       "and packages them into a timestamped ZIP archive for download or migration.",
+        "and packages them into a timestamped ZIP archive for download or migration.",
         "github_owner": "dantweb",
         "github_repo": "wp-dantweb-post2md",
         "author_name": "dantweb",
@@ -325,7 +334,7 @@ SOFTWARE_PACKAGES = [
         "pkg_slug": "quantum-llm",
         "pkg_name": "Quantum LLM",
         "description": "Research toolkit exploring quantum-mechanical effects in large language models. "
-                       "Includes TDD implementation plans, visualisations, and paper summaries.",
+        "Includes TDD implementation plans, visualisations, and paper summaries.",
         "github_owner": "dantweb",
         "github_repo": "quantum-llm",
         "author_name": "dantweb",
@@ -342,20 +351,40 @@ def _get_or_create_plan(session, slug, name):
         return plan, False
     eur = session.query(Currency).filter_by(code="EUR").first()
     if not eur:
-        eur = Currency(code="EUR", name="Euro", symbol="€",
-                       exchange_rate=Decimal("1.0"), is_default=True, is_active=True)
+        eur = Currency(
+            code="EUR",
+            name="Euro",
+            symbol="€",
+            exchange_rate=Decimal("1.0"),
+            is_default=True,
+            is_active=True,
+        )
         session.add(eur)
         session.flush()
-    price_obj = Price(price_float=0.0, price_decimal=Decimal("0.00"),
-                      currency_id=eur.id, net_amount=Decimal("0.00"),
-                      gross_amount=Decimal("0.00"), taxes={})
+    price_obj = Price(
+        price_float=0.0,
+        price_decimal=Decimal("0.00"),
+        currency_id=eur.id,
+        net_amount=Decimal("0.00"),
+        gross_amount=Decimal("0.00"),
+        taxes={},
+    )
     session.add(price_obj)
     session.flush()
-    plan = TarifPlan(name=name, slug=slug, description="",
-                     price_float=0.0, price_id=price_obj.id,
-                     price=Decimal("0.00"), currency="EUR",
-                     billing_period=BillingPeriod.YEARLY,
-                     trial_days=0, features={}, is_active=True, sort_order=0)
+    plan = TarifPlan(
+        name=name,
+        slug=slug,
+        description="",
+        price_float=0.0,
+        price_id=price_obj.id,
+        price=Decimal("0.00"),
+        currency="EUR",
+        billing_period=BillingPeriod.YEARLY,
+        trial_days=0,
+        features={},
+        is_active=True,
+        sort_order=0,
+    )
     session.add(plan)
     session.flush()
     return plan, True
@@ -367,7 +396,9 @@ try:
     print("\n=== Software Packages ===")
 
     for entry in SOFTWARE_PACKAGES:
-        plan, plan_created = _get_or_create_plan(session, entry["plan_slug"], entry["plan_name"])
+        plan, plan_created = _get_or_create_plan(
+            session, entry["plan_slug"], entry["plan_name"]
+        )
         if plan_created:
             print(f"  Created plan : {entry['plan_slug']}")
         else:
@@ -393,7 +424,9 @@ try:
         session.flush()
 
         # Create GhrmSoftwarePackage if it doesn't exist yet
-        existing_pkg = session.query(GhrmSoftwarePackage).filter_by(slug=entry["pkg_slug"]).first()
+        existing_pkg = (
+            session.query(GhrmSoftwarePackage).filter_by(slug=entry["pkg_slug"]).first()
+        )
         if existing_pkg:
             # Update description and icon_url if missing or changed
             if not existing_pkg.description and entry.get("description"):
@@ -426,10 +459,16 @@ try:
     print("\n=== Software Sync Demo Content ===")
 
     for entry in SOFTWARE_PACKAGES:
-        pkg = session.query(GhrmSoftwarePackage).filter_by(slug=entry["pkg_slug"]).first()
+        pkg = (
+            session.query(GhrmSoftwarePackage).filter_by(slug=entry["pkg_slug"]).first()
+        )
         if not pkg:
             continue
-        sync = session.query(GhrmSoftwareSync).filter_by(software_package_id=pkg.id).first()
+        sync = (
+            session.query(GhrmSoftwareSync)
+            .filter_by(software_package_id=pkg.id)
+            .first()
+        )
         if not sync:
             sync = GhrmSoftwareSync(software_package_id=pkg.id)
             session.add(sync)
@@ -473,7 +512,9 @@ try:
 
     print("\n=== CMS Category ===")
     cms_cat, created = get_or_create(
-        session, CmsCategory, slug="ghrm",
+        session,
+        CmsCategory,
+        slug="ghrm",
         name="Software Catalogue",
         sort_order=50,
     )
@@ -485,46 +526,50 @@ try:
 
     # Catalogue layout — used by category index + package list pages
     layout_catalogue, created = get_or_create(
-        session, CmsLayout, slug=CATALOGUE_LAYOUT_SLUG,
+        session,
+        CmsLayout,
+        slug=CATALOGUE_LAYOUT_SLUG,
         name="GHRM Software Catalogue",
         areas=[
-            {"name": "header",          "type": "header", "label": "Header"},
-            {"name": "breadcrumbs",     "type": "vue",    "label": ""},
-            {"name": "ghrm-categories", "type": "vue",    "label": "Categories"},
-            {"name": "footer",          "type": "footer", "label": "Footer"},
+            {"name": "header", "type": "header", "label": "Header"},
+            {"name": "breadcrumbs", "type": "vue", "label": ""},
+            {"name": "ghrm-categories", "type": "vue", "label": "Categories"},
+            {"name": "footer", "type": "footer", "label": "Footer"},
         ],
         sort_order=10,
         is_active=True,
     )
     if not created:
         layout_catalogue.areas = [
-            {"name": "header",          "type": "header", "label": "Header"},
-            {"name": "breadcrumbs",     "type": "vue",    "label": ""},
-            {"name": "ghrm-categories", "type": "vue",    "label": "Categories"},
-            {"name": "footer",          "type": "footer", "label": "Footer"},
+            {"name": "header", "type": "header", "label": "Header"},
+            {"name": "breadcrumbs", "type": "vue", "label": ""},
+            {"name": "ghrm-categories", "type": "vue", "label": "Categories"},
+            {"name": "footer", "type": "footer", "label": "Footer"},
         ]
         session.flush()
     print(f"  {'Created' if created else 'Exists'}: {CATALOGUE_LAYOUT_SLUG}")
 
     # Detail layout — used by individual package pages
     layout_detail, created = get_or_create(
-        session, CmsLayout, slug=DETAIL_LAYOUT_SLUG,
+        session,
+        CmsLayout,
+        slug=DETAIL_LAYOUT_SLUG,
         name="GHRM Software Detail",
         areas=[
-            {"name": "header",               "type": "header", "label": "Header"},
-            {"name": "breadcrumbs",          "type": "vue",    "label": ""},
-            {"name": "ghrm-software-detail", "type": "vue",    "label": "Software Detail"},
-            {"name": "footer",               "type": "footer", "label": "Footer"},
+            {"name": "header", "type": "header", "label": "Header"},
+            {"name": "breadcrumbs", "type": "vue", "label": ""},
+            {"name": "ghrm-software-detail", "type": "vue", "label": "Software Detail"},
+            {"name": "footer", "type": "footer", "label": "Footer"},
         ],
         sort_order=11,
         is_active=True,
     )
     if not created:
         layout_detail.areas = [
-            {"name": "header",               "type": "header", "label": "Header"},
-            {"name": "breadcrumbs",          "type": "vue",    "label": ""},
-            {"name": "ghrm-software-detail", "type": "vue",    "label": "Software Detail"},
-            {"name": "footer",               "type": "footer", "label": "Footer"},
+            {"name": "header", "type": "header", "label": "Header"},
+            {"name": "breadcrumbs", "type": "vue", "label": ""},
+            {"name": "ghrm-software-detail", "type": "vue", "label": "Software Detail"},
+            {"name": "footer", "type": "footer", "label": "Footer"},
         ]
         session.flush()
     print(f"  {'Created' if created else 'Exists'}: {DETAIL_LAYOUT_SLUG}")
@@ -559,7 +604,9 @@ try:
     widget_map: dict = {}
     for w in WIDGETS:
         widget, created = get_or_create(
-            session, CmsWidget, slug=w["slug"],
+            session,
+            CmsWidget,
+            slug=w["slug"],
             name=w["name"],
             widget_type=w["widget_type"],
             content_json=w["content_json"],
@@ -579,12 +626,14 @@ try:
             .first()
         )
         if not exists:
-            session.add(CmsLayoutWidget(
-                layout_id=layout.id,
-                widget_id=widget.id,
-                area_name=area_name,
-                sort_order=sort_order,
-            ))
+            session.add(
+                CmsLayoutWidget(
+                    layout_id=layout.id,
+                    widget_id=widget.id,
+                    area_name=area_name,
+                    sort_order=sort_order,
+                )
+            )
             session.flush()
             return True
         return False
@@ -596,40 +645,60 @@ try:
     # Catalogue layout
     if header_nav:
         added = assign_widget(layout_catalogue, header_nav, "header", 0)
-        print(f"  {'Assigned' if added else 'Exists'}: {CATALOGUE_LAYOUT_SLUG} / header → header-nav")
+        print(
+            f"  {'Assigned' if added else 'Exists'}: {CATALOGUE_LAYOUT_SLUG} / header → header-nav"
+        )
     else:
         print("  ! header-nav not found — run populate_cms first")
 
     if breadcrumbs_widget:
         added = assign_widget(layout_catalogue, breadcrumbs_widget, "breadcrumbs", 3)
-        print(f"  {'Assigned' if added else 'Exists'}: {CATALOGUE_LAYOUT_SLUG} / breadcrumbs → breadcrumbs")
+        print(
+            f"  {'Assigned' if added else 'Exists'}: {CATALOGUE_LAYOUT_SLUG} / breadcrumbs → breadcrumbs"
+        )
     else:
         print("  ! breadcrumbs widget not found — run populate_cms first")
 
-    added = assign_widget(layout_catalogue, widget_map["ghrm-categories"], "ghrm-categories", 0)
-    print(f"  {'Assigned' if added else 'Exists'}: {CATALOGUE_LAYOUT_SLUG} / ghrm-categories → ghrm-categories")
+    added = assign_widget(
+        layout_catalogue, widget_map["ghrm-categories"], "ghrm-categories", 0
+    )
+    print(
+        f"  {'Assigned' if added else 'Exists'}: {CATALOGUE_LAYOUT_SLUG} / ghrm-categories → ghrm-categories"
+    )
 
     if footer_nav:
         added = assign_widget(layout_catalogue, footer_nav, "footer", 0)
-        print(f"  {'Assigned' if added else 'Exists'}: {CATALOGUE_LAYOUT_SLUG} / footer → footer-nav")
+        print(
+            f"  {'Assigned' if added else 'Exists'}: {CATALOGUE_LAYOUT_SLUG} / footer → footer-nav"
+        )
     else:
         print("  ! footer-nav not found — run populate_cms first")
 
     # Detail layout
     if header_nav:
         added = assign_widget(layout_detail, header_nav, "header", 0)
-        print(f"  {'Assigned' if added else 'Exists'}: {DETAIL_LAYOUT_SLUG} / header → header-nav")
+        print(
+            f"  {'Assigned' if added else 'Exists'}: {DETAIL_LAYOUT_SLUG} / header → header-nav"
+        )
 
     if breadcrumbs_widget:
         added = assign_widget(layout_detail, breadcrumbs_widget, "breadcrumbs", 3)
-        print(f"  {'Assigned' if added else 'Exists'}: {DETAIL_LAYOUT_SLUG} / breadcrumbs → breadcrumbs")
+        print(
+            f"  {'Assigned' if added else 'Exists'}: {DETAIL_LAYOUT_SLUG} / breadcrumbs → breadcrumbs"
+        )
 
-    added = assign_widget(layout_detail, widget_map["ghrm-software-detail"], "ghrm-software-detail", 0)
-    print(f"  {'Assigned' if added else 'Exists'}: {DETAIL_LAYOUT_SLUG} / ghrm-software-detail → ghrm-software-detail")
+    added = assign_widget(
+        layout_detail, widget_map["ghrm-software-detail"], "ghrm-software-detail", 0
+    )
+    print(
+        f"  {'Assigned' if added else 'Exists'}: {DETAIL_LAYOUT_SLUG} / ghrm-software-detail → ghrm-software-detail"
+    )
 
     if footer_nav:
         added = assign_widget(layout_detail, footer_nav, "footer", 0)
-        print(f"  {'Assigned' if added else 'Exists'}: {DETAIL_LAYOUT_SLUG} / footer → footer-nav")
+        print(
+            f"  {'Assigned' if added else 'Exists'}: {DETAIL_LAYOUT_SLUG} / footer → footer-nav"
+        )
 
     # ── CMS Pages ───────────────────────────────────────────────────────────
 
@@ -638,7 +707,9 @@ try:
     # ── Template pages (used by GhrmLayoutWrapper to resolve layout + style) ──
 
     tmpl_catalogue, created = get_or_create(
-        session, CmsPage, slug=CATALOGUE_PAGE_SLUG,
+        session,
+        CmsPage,
+        slug=CATALOGUE_PAGE_SLUG,
         name="GHRM Catalogue Template",
         language="en",
         content_json={"type": "doc", "content": []},
@@ -652,7 +723,9 @@ try:
     print(f"  {'Created' if created else 'Exists'}: template /{CATALOGUE_PAGE_SLUG}")
 
     tmpl_detail, created = get_or_create(
-        session, CmsPage, slug=DETAIL_PAGE_SLUG,
+        session,
+        CmsPage,
+        slug=DETAIL_PAGE_SLUG,
         name="GHRM Detail Template",
         language="en",
         content_json={"type": "doc", "content": []},
@@ -667,12 +740,15 @@ try:
 
     # Look up dark-midnight style (created by populate_cms.py)
     from plugins.cms.src.models.cms_style import CmsStyle as _CmsStyle
+
     style_dark = session.query(_CmsStyle).filter_by(slug="dark-midnight").first()
     style_light = session.query(_CmsStyle).filter_by(slug="light-clean").first()
 
     # /software — alternate root entry point with dark theme
     page_software, created = get_or_create(
-        session, CmsPage, slug="software",
+        session,
+        CmsPage,
+        slug="software",
         name="Software",
         language="en",
         content_json={"type": "doc", "content": []},
@@ -689,7 +765,9 @@ try:
 
     # Category index (root /category page)
     page_index, created = get_or_create(
-        session, CmsPage, slug="category",
+        session,
+        CmsPage,
+        slug="category",
         name="Software Catalogue",
         language="en",
         content_json={"type": "doc", "content": []},
@@ -709,7 +787,9 @@ try:
         label = slug_to_label(cat_slug)
         page_slug = f"category/{cat_slug}"
         page, created = get_or_create(
-            session, CmsPage, slug=page_slug,
+            session,
+            CmsPage,
+            slug=page_slug,
             name=f"{label} Packages",
             language="en",
             content_json={"type": "doc", "content": []},
@@ -729,14 +809,19 @@ try:
     print("\n=== Done ===")
     print(f"  CMS category    : ghrm")
     print(f"  Layouts         : {CATALOGUE_LAYOUT_SLUG}, {DETAIL_LAYOUT_SLUG}")
-    print(f"  Widgets         : {', '.join(w['slug'] for w in WIDGETS)} (vue-component)")
+    print(
+        f"  Widgets         : {', '.join(w['slug'] for w in WIDGETS)} (vue-component)"
+    )
     print(f"  Template pages  : {CATALOGUE_PAGE_SLUG}, {DETAIL_PAGE_SLUG}")
     print(f"  Content pages   : category + {len(CATEGORY_SLUGS)} category pages")
-    print(f"\n  Assign a CMS Style to a template page in the admin to override catalogue styles.")
+    print(
+        f"\n  Assign a CMS Style to a template page in the admin to override catalogue styles."
+    )
 
 except Exception:
     session.rollback()
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 finally:

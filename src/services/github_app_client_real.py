@@ -4,7 +4,9 @@ import httpx
 import jwt as pyjwt
 from typing import List, Optional
 from plugins.ghrm.src.services.github_app_client import (
-    IGithubAppClient, ReleaseDTO, ReleaseAsset,
+    IGithubAppClient,
+    ReleaseDTO,
+    ReleaseAsset,
 )
 
 
@@ -43,7 +45,9 @@ class GithubAppClient(IGithubAppClient):
     def _ensure_installation_token(self) -> None:
         """Fetch a fresh installation token if not already set."""
         if not self._installation_token:
-            self._installation_token = self.get_installation_token(self._installation_id)
+            self._installation_token = self.get_installation_token(
+                self._installation_id
+            )
 
     def set_installation_token(self, token: str) -> None:
         """Update the installation token (e.g. after refresh)."""
@@ -64,13 +68,19 @@ class GithubAppClient(IGithubAppClient):
             "X-GitHub-Api-Version": "2022-11-28",
         }
 
-    def add_collaborator(self, owner: str, repo: str, username: str, branch: str) -> bool:
+    def add_collaborator(
+        self, owner: str, repo: str, username: str, branch: str
+    ) -> bool:
         """Add user as collaborator with push access (minimum for release branch)."""
         url = f"{self.GITHUB_API}/repos/{owner}/{repo}/collaborators/{username}"
         with httpx.Client(timeout=10) as client:
-            resp = client.put(url, headers=self._repo_headers(), json={"permission": "push"})
+            resp = client.put(
+                url, headers=self._repo_headers(), json={"permission": "push"}
+            )
         if resp.status_code not in (201, 204):
-            raise GithubAppClientError(f"add_collaborator failed: {resp.status_code} {resp.text}")
+            raise GithubAppClientError(
+                f"add_collaborator failed: {resp.status_code} {resp.text}"
+            )
         return True
 
     def remove_collaborator(self, owner: str, repo: str, username: str) -> bool:
@@ -79,7 +89,9 @@ class GithubAppClient(IGithubAppClient):
         with httpx.Client(timeout=10) as client:
             resp = client.delete(url, headers=self._repo_headers())
         if resp.status_code not in (204, 404):
-            raise GithubAppClientError(f"remove_collaborator failed: {resp.status_code} {resp.text}")
+            raise GithubAppClientError(
+                f"remove_collaborator failed: {resp.status_code} {resp.text}"
+            )
         return True
 
     def create_deploy_token(self, owner: str, repo: str, username: str) -> str:
@@ -103,10 +115,14 @@ class GithubAppClient(IGithubAppClient):
         with httpx.Client(timeout=10) as client:
             resp = client.post(url, headers=jwt_headers)
         if resp.status_code != 201:
-            raise GithubAppClientError(f"get_installation_token failed: {resp.status_code}")
+            raise GithubAppClientError(
+                f"get_installation_token failed: {resp.status_code}"
+            )
         return resp.json()["token"]
 
-    def exchange_oauth_code(self, code: str, client_id: str, client_secret: str, redirect_uri: str) -> str:
+    def exchange_oauth_code(
+        self, code: str, client_id: str, client_secret: str, redirect_uri: str
+    ) -> str:
         """Exchange OAuth code for access token."""
         with httpx.Client(timeout=10) as client:
             resp = client.post(
@@ -123,7 +139,9 @@ class GithubAppClient(IGithubAppClient):
             raise GithubAppClientError(f"OAuth exchange failed: {resp.status_code}")
         data = resp.json()
         if "error" in data:
-            raise GithubAppClientError(f"OAuth error: {data.get('error_description', data['error'])}")
+            raise GithubAppClientError(
+                f"OAuth error: {data.get('error_description', data['error'])}"
+            )
         return data["access_token"]
 
     def get_oauth_user(self, oauth_token: str) -> dict:
@@ -158,18 +176,25 @@ class GithubAppClient(IGithubAppClient):
         """Fetch all releases ordered newest first."""
         url = f"{self.GITHUB_API}/repos/{owner}/{repo}/releases"
         with httpx.Client(timeout=10) as client:
-            resp = client.get(url, headers=self._repo_headers(), params={"per_page": 50})
+            resp = client.get(
+                url, headers=self._repo_headers(), params={"per_page": 50}
+            )
         if resp.status_code != 200:
             raise GithubAppClientError(f"fetch_releases failed: {resp.status_code}")
         releases = []
         for r in resp.json():
-            assets = [ReleaseAsset(name=a["name"], url=a["browser_download_url"]) for a in r.get("assets", [])]
-            releases.append(ReleaseDTO(
-                tag=r["tag_name"],
-                date=r["published_at"] or r["created_at"],
-                notes=r.get("body") or "",
-                assets=assets,
-            ))
+            assets = [
+                ReleaseAsset(name=a["name"], url=a["browser_download_url"])
+                for a in r.get("assets", [])
+            ]
+            releases.append(
+                ReleaseDTO(
+                    tag=r["tag_name"],
+                    date=r["published_at"] or r["created_at"],
+                    notes=r.get("body") or "",
+                    assets=assets,
+                )
+            )
         return releases
 
     def fetch_screenshot_urls(self, owner: str, repo: str) -> List[str]:
@@ -180,19 +205,24 @@ class GithubAppClient(IGithubAppClient):
         if resp.status_code == 404:
             return []
         if resp.status_code != 200:
-            raise GithubAppClientError(f"fetch_screenshot_urls failed: {resp.status_code}")
+            raise GithubAppClientError(
+                f"fetch_screenshot_urls failed: {resp.status_code}"
+            )
         return [f["download_url"] for f in resp.json() if f.get("type") == "file"]
 
     def _fetch_file_content(self, owner: str, repo: str, path: str) -> str:
         """Fetch a file from the repo and return decoded text content."""
         import base64
+
         url = f"{self.GITHUB_API}/repos/{owner}/{repo}/contents/{path}"
         with httpx.Client(timeout=10) as client:
             resp = client.get(url, headers=self._repo_headers())
         if resp.status_code == 404:
             raise GithubAppClientError(f"File not found: {path}")
         if resp.status_code != 200:
-            raise GithubAppClientError(f"fetch_file_content({path}) failed: {resp.status_code}")
+            raise GithubAppClientError(
+                f"fetch_file_content({path}) failed: {resp.status_code}"
+            )
         data = resp.json()
         content = data.get("content", "")
         encoding = data.get("encoding", "base64")

@@ -13,7 +13,7 @@ class ReleaseAsset:
 @dataclass
 class ReleaseDTO:
     tag: str
-    date: str          # ISO format
+    date: str  # ISO format
     notes: str
     assets: List[ReleaseAsset] = field(default_factory=list)
 
@@ -22,22 +22,31 @@ class IGithubAppClient(ABC):
     """Interface for all GitHub API operations used by GHRM."""
 
     @abstractmethod
-    def add_collaborator(self, owner: str, repo: str, username: str, branch: str) -> bool: ...
+    def add_collaborator(
+        self, owner: str, repo: str, username: str, branch: str
+    ) -> bool:
+        ...
 
     @abstractmethod
-    def remove_collaborator(self, owner: str, repo: str, username: str) -> bool: ...
+    def remove_collaborator(self, owner: str, repo: str, username: str) -> bool:
+        ...
 
     @abstractmethod
-    def create_deploy_token(self, owner: str, repo: str, username: str) -> str: ...
+    def create_deploy_token(self, owner: str, repo: str, username: str) -> str:
+        ...
 
     @abstractmethod
-    def revoke_deploy_token(self, token: str) -> None: ...
+    def revoke_deploy_token(self, token: str) -> None:
+        ...
 
     @abstractmethod
-    def get_installation_token(self, installation_id: str) -> str: ...
+    def get_installation_token(self, installation_id: str) -> str:
+        ...
 
     @abstractmethod
-    def exchange_oauth_code(self, code: str, client_id: str, client_secret: str, redirect_uri: str) -> str:
+    def exchange_oauth_code(
+        self, code: str, client_id: str, client_secret: str, redirect_uri: str
+    ) -> str:
         """Exchange OAuth code for access token. Returns the token string."""
         ...
 
@@ -47,19 +56,24 @@ class IGithubAppClient(ABC):
         ...
 
     @abstractmethod
-    def fetch_readme(self, owner: str, repo: str) -> str: ...
+    def fetch_readme(self, owner: str, repo: str) -> str:
+        ...
 
     @abstractmethod
-    def fetch_changelog(self, owner: str, repo: str) -> Optional[str]: ...
+    def fetch_changelog(self, owner: str, repo: str) -> Optional[str]:
+        ...
 
     @abstractmethod
-    def fetch_docs_readme(self, owner: str, repo: str) -> Optional[str]: ...
+    def fetch_docs_readme(self, owner: str, repo: str) -> Optional[str]:
+        ...
 
     @abstractmethod
-    def fetch_releases(self, owner: str, repo: str) -> List[ReleaseDTO]: ...
+    def fetch_releases(self, owner: str, repo: str) -> List[ReleaseDTO]:
+        ...
 
     @abstractmethod
-    def fetch_screenshot_urls(self, owner: str, repo: str) -> List[str]: ...
+    def fetch_screenshot_urls(self, owner: str, repo: str) -> List[str]:
+        ...
 
 
 class MockGithubAppClient(IGithubAppClient):
@@ -70,11 +84,11 @@ class MockGithubAppClient(IGithubAppClient):
     """
 
     def __init__(self):
-        self.collaborators: dict = {}           # (owner, repo) -> set of usernames
-        self.deploy_tokens: dict = {}           # username -> token
+        self.collaborators: dict = {}  # (owner, repo) -> set of usernames
+        self.deploy_tokens: dict = {}  # username -> token
         self.revoked_tokens: list = []
-        self.oauth_token_map: dict = {}         # code -> token
-        self.oauth_user_map: dict = {}          # token -> {"login": ..., "id": ...}
+        self.oauth_token_map: dict = {}  # code -> token
+        self.oauth_user_map: dict = {}  # token -> {"login": ..., "id": ...}
         self.readme_content: str = "# Mock README"
         self.changelog_content: Optional[str] = "# Mock Changelog"
         self.docs_content: Optional[str] = "# Mock Docs"
@@ -83,7 +97,9 @@ class MockGithubAppClient(IGithubAppClient):
         self.raise_on_add_collaborator: Optional[Exception] = None
         self.raise_on_exchange: Optional[Exception] = None
 
-    def add_collaborator(self, owner: str, repo: str, username: str, branch: str) -> bool:
+    def add_collaborator(
+        self, owner: str, repo: str, username: str, branch: str
+    ) -> bool:
         if self.raise_on_add_collaborator:
             raise self.raise_on_add_collaborator
         key = (owner, repo)
@@ -106,13 +122,17 @@ class MockGithubAppClient(IGithubAppClient):
     def get_installation_token(self, installation_id: str) -> str:
         return f"mock-installation-token-{installation_id}"
 
-    def exchange_oauth_code(self, code: str, client_id: str, client_secret: str, redirect_uri: str) -> str:
+    def exchange_oauth_code(
+        self, code: str, client_id: str, client_secret: str, redirect_uri: str
+    ) -> str:
         if self.raise_on_exchange:
             raise self.raise_on_exchange
         return self.oauth_token_map.get(code, f"mock-oauth-token-{code}")
 
     def get_oauth_user(self, oauth_token: str) -> dict:
-        return self.oauth_user_map.get(oauth_token, {"login": "testuser", "id": "12345"})
+        return self.oauth_user_map.get(
+            oauth_token, {"login": "testuser", "id": "12345"}
+        )
 
     def fetch_readme(self, owner: str, repo: str) -> str:
         return self.readme_content

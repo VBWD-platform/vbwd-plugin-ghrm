@@ -42,16 +42,27 @@ from flask import Blueprint, jsonify, request, redirect, g, current_app
 from src.extensions import db
 from src.middleware.auth import require_auth, require_admin
 
-from plugins.ghrm.src.repositories.software_package_repository import GhrmSoftwarePackageRepository
-from plugins.ghrm.src.repositories.software_sync_repository import GhrmSoftwareSyncRepository
-from plugins.ghrm.src.repositories.user_github_access_repository import GhrmUserGithubAccessRepository
+from plugins.ghrm.src.repositories.software_package_repository import (
+    GhrmSoftwarePackageRepository,
+)
+from plugins.ghrm.src.repositories.software_sync_repository import (
+    GhrmSoftwareSyncRepository,
+)
+from plugins.ghrm.src.repositories.user_github_access_repository import (
+    GhrmUserGithubAccessRepository,
+)
 from plugins.ghrm.src.repositories.access_log_repository import GhrmAccessLogRepository
 from plugins.ghrm.src.services.software_package_service import (
-    SoftwarePackageService, GhrmPackageNotFoundError, GhrmSyncAuthError,
-    GhrmNotConfiguredError, GhrmSubscriptionRequiredError,
+    SoftwarePackageService,
+    GhrmPackageNotFoundError,
+    GhrmSyncAuthError,
+    GhrmNotConfiguredError,
+    GhrmSubscriptionRequiredError,
 )
 from plugins.ghrm.src.services.github_access_service import (
-    GithubAccessService, GhrmOAuthError, GhrmGithubNotConnectedError,
+    GithubAccessService,
+    GhrmOAuthError,
+    GhrmGithubNotConnectedError,
 )
 from plugins.ghrm.src.services.github_app_client import IGithubAppClient
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
@@ -61,6 +72,7 @@ ghrm_bp = Blueprint("ghrm", __name__)
 
 
 # ─── Dependency factories ────────────────────────────────────────────────────
+
 
 class GithubNotConfiguredError(Exception):
     """Raised when GitHub App credentials are absent or incomplete."""
@@ -75,8 +87,10 @@ def _make_github_client(cfg: dict) -> IGithubAppClient:
     set to any value other than "true".
     """
     import os
+
     if os.environ.get("GHRM_USE_MOCK_GITHUB", "").lower() == "true":
         from plugins.ghrm.src.services.github_app_client import MockGithubAppClient
+
         return MockGithubAppClient()
     app_id = cfg.get("github_app_id", "")
     installation_id = cfg.get("github_installation_id", "")
@@ -87,6 +101,7 @@ def _make_github_client(cfg: dict) -> IGithubAppClient:
             "and a valid github_app_private_key_path in the GHRM plugin config."
         )
     from plugins.ghrm.src.services.github_app_client_real import GithubAppClient
+
     with open(pem_path, "r") as f:
         private_key = f.read()
     return GithubAppClient(
@@ -129,6 +144,7 @@ def _access_svc() -> GithubAccessService:
 def _cfg() -> dict:
     try:
         from flask import current_app
+
         pm = getattr(current_app, "plugin_manager", None)
         if pm is None:
             return {}
@@ -140,10 +156,12 @@ def _cfg() -> dict:
 
 # ─── Public catalogue ────────────────────────────────────────────────────────
 
+
 @ghrm_bp.route("/api/v1/ghrm/config", methods=["GET"])
 def get_public_config():
     """Return public GHRM config needed by the frontend (layout slugs, etc.)."""
     import json as _json, os as _os
+
     cfg = _cfg()
 
     def _fallback_cfg():
@@ -155,12 +173,18 @@ def get_public_config():
             return {}
 
     fb = _fallback_cfg()
-    catalogue_slug = cfg.get("software_catalogue_cms_page_slug") or fb.get("software_catalogue_cms_page_slug", "ghrm-software-catalogue")
-    detail_slug = cfg.get("software_detail_cms_page_slug") or fb.get("software_detail_cms_page_slug", "ghrm-software-detail")
-    return jsonify({
-        "catalogue_page_slug": catalogue_slug,
-        "detail_page_slug": detail_slug,
-    })
+    catalogue_slug = cfg.get("software_catalogue_cms_page_slug") or fb.get(
+        "software_catalogue_cms_page_slug", "ghrm-software-catalogue"
+    )
+    detail_slug = cfg.get("software_detail_cms_page_slug") or fb.get(
+        "software_detail_cms_page_slug", "ghrm-software-detail"
+    )
+    return jsonify(
+        {
+            "catalogue_page_slug": catalogue_slug,
+            "detail_page_slug": detail_slug,
+        }
+    )
 
 
 @ghrm_bp.route("/api/v1/ghrm/categories", methods=["GET"])
@@ -169,6 +193,7 @@ def list_categories():
     import json as _json, os as _os
     from src.extensions import db
     from src.models.tarif_plan_category import TarifPlanCategory
+
     cfg = _cfg()
     slugs = cfg.get("software_category_slugs") or []
     # Fall back to config.json defaults when DB config is empty
@@ -182,11 +207,12 @@ def list_categories():
     # Look up real names from DB; fall back to slug-derived title if not found
     db_cats = {
         c.slug: c.name
-        for c in db.session.query(TarifPlanCategory).filter(TarifPlanCategory.slug.in_(slugs)).all()
+        for c in db.session.query(TarifPlanCategory)
+        .filter(TarifPlanCategory.slug.in_(slugs))
+        .all()
     }
     categories = [
-        {"slug": s, "label": db_cats.get(s, s.replace("-", " ").title())}
-        for s in slugs
+        {"slug": s, "label": db_cats.get(s, s.replace("-", " ").title())} for s in slugs
     ]
     return jsonify({"categories": categories})
 
@@ -198,7 +224,9 @@ def list_packages():
     per_page = min(int(request.args.get("per_page", 20)), 100)
     category_slug = request.args.get("category_slug") or None
     query = request.args.get("q") or None
-    result = _pkg_svc().list_packages(page=page, per_page=per_page, category_slug=category_slug, query=query)
+    result = _pkg_svc().list_packages(
+        page=page, per_page=per_page, category_slug=category_slug, query=query
+    )
     return jsonify(result)
 
 
@@ -245,7 +273,9 @@ def get_install(slug):
     raw = GhrmUserGithubAccessRepository(db.session).find_by_user_id(user_id)
     token = raw.deploy_token if raw else None
     try:
-        return jsonify(_pkg_svc().get_install_instructions(slug, user_id, deploy_token=token))
+        return jsonify(
+            _pkg_svc().get_install_instructions(slug, user_id, deploy_token=token)
+        )
     except GhrmPackageNotFoundError as e:
         return jsonify({"error": str(e)}), 404
     except GhrmSubscriptionRequiredError as e:
@@ -253,6 +283,7 @@ def get_install(slug):
 
 
 # ─── Sync endpoint (GitHub Action) ──────────────────────────────────────────
+
 
 @ghrm_bp.route("/api/v1/ghrm/sync", methods=["GET", "POST"])
 def sync_package():
@@ -276,17 +307,20 @@ def sync_package():
 
 # ─── GitHub OAuth ────────────────────────────────────────────────────────────
 
+
 @ghrm_bp.route("/api/v1/ghrm/auth/github", methods=["GET"])
 @require_auth
 def github_oauth_start():
     """Build and return the GitHub OAuth URL (client does the redirect)."""
     import jwt as pyjwt
     import time
+
     user_id = g.user_id
     nonce = secrets.token_urlsafe(16)
     # Store nonce in Redis with 10-min TTL
     try:
         from src.extensions import redis_client
+
         redis_client.setex(f"ghrm:oauth:nonce:{user_id}", 600, nonce)
     except Exception:
         pass
@@ -307,19 +341,23 @@ def github_oauth_start():
 def github_oauth_callback():
     """Exchange OAuth code, verify CSRF state, store GitHub identity."""
     import jwt as pyjwt
+
     user_id = g.user_id
     body = request.json or {}
     code = body.get("code", "")
     state = body.get("state", "")
     # Verify state JWT
     try:
-        payload = pyjwt.decode(state, current_app.config.get("JWT_SECRET_KEY", "dev"), algorithms=["HS256"])
+        payload = pyjwt.decode(
+            state, current_app.config.get("JWT_SECRET_KEY", "dev"), algorithms=["HS256"]
+        )
         if str(payload.get("user_id")) != str(user_id):
             return jsonify({"error": "State mismatch"}), 400
         # Verify nonce
         nonce = payload.get("nonce", "")
         try:
             from src.extensions import redis_client
+
             stored = redis_client.get(f"ghrm:oauth:nonce:{user_id}")
             if not stored or stored.decode() != nonce:
                 return jsonify({"error": "Invalid or expired state"}), 400
@@ -352,6 +390,7 @@ def github_disconnect():
 
 # ─── User profile ────────────────────────────────────────────────────────────
 
+
 @ghrm_bp.route("/api/v1/ghrm/access", methods=["GET"])
 @require_auth
 def get_access_status():
@@ -366,6 +405,7 @@ def get_access_status():
 
 # ─── Admin endpoints ─────────────────────────────────────────────────────────
 
+
 @ghrm_bp.route("/api/v1/admin/ghrm/packages", methods=["GET"])
 @require_auth
 @require_admin
@@ -378,7 +418,15 @@ def admin_list_packages():
     if tariff_plan_id:
         pkg = repo.find_by_tariff_plan_id(tariff_plan_id)
         items = [pkg.to_dict()] if pkg else []
-        return jsonify({"items": items, "total": len(items), "page": 1, "per_page": per_page, "pages": 1})
+        return jsonify(
+            {
+                "items": items,
+                "total": len(items),
+                "page": 1,
+                "per_page": per_page,
+                "pages": 1,
+            }
+        )
     result = repo.find_all(page=page, per_page=per_page, query=query)
     result["items"] = [p.to_dict() for p in result["items"]]
     return jsonify(result)
@@ -423,17 +471,41 @@ def admin_update_package(pkg_id):
     if not pkg:
         return jsonify({"error": "Not found"}), 404
     body = request.json or {}
-    updatable = ("name", "description", "author_name", "icon_url", "github_owner", "github_repo",
-                 "github_protected_branch", "tech_specs", "related_slugs", "sort_order", "is_active")
+    updatable = (
+        "name",
+        "description",
+        "author_name",
+        "icon_url",
+        "github_owner",
+        "github_repo",
+        "github_protected_branch",
+        "tech_specs",
+        "related_slugs",
+        "sort_order",
+        "is_active",
+    )
     for field in updatable:
         if field in body:
             setattr(pkg, field, body[field])
     # Sync overrides
-    if any(k in body for k in ("override_readme", "override_changelog", "override_docs", "admin_screenshots")):
+    if any(
+        k in body
+        for k in (
+            "override_readme",
+            "override_changelog",
+            "override_docs",
+            "admin_screenshots",
+        )
+    ):
         sync_repo = GhrmSoftwareSyncRepository(db.session)
         sync = sync_repo.find_by_package_id(pkg_id)
         if sync:
-            for field in ("override_readme", "override_changelog", "override_docs", "admin_screenshots"):
+            for field in (
+                "override_readme",
+                "override_changelog",
+                "override_docs",
+                "admin_screenshots",
+            ):
                 if field in body:
                     setattr(sync, field, body[field])
             sync_repo.save(sync)
@@ -490,7 +562,14 @@ _VALID_PREVIEW_FIELDS = {"readme", "changelog", "screenshots"}
 @require_admin
 def admin_preview_field(pkg_id, field):
     if field not in _VALID_PREVIEW_FIELDS:
-        return jsonify({"error": f"Invalid field '{field}'. Must be one of: readme, changelog, screenshots"}), 400
+        return (
+            jsonify(
+                {
+                    "error": f"Invalid field '{field}'. Must be one of: readme, changelog, screenshots"
+                }
+            ),
+            400,
+        )
     try:
         svc = _pkg_svc()
         if field == "readme":
@@ -516,7 +595,14 @@ def admin_preview_field(pkg_id, field):
 @require_admin
 def admin_sync_field(pkg_id, field):
     if field not in _VALID_PREVIEW_FIELDS:
-        return jsonify({"error": f"Invalid field '{field}'. Must be one of: readme, changelog, screenshots"}), 400
+        return (
+            jsonify(
+                {
+                    "error": f"Invalid field '{field}'. Must be one of: readme, changelog, screenshots"
+                }
+            ),
+            400,
+        )
     try:
         svc = _pkg_svc()
         result = svc.sync_field(pkg_id, field)
@@ -543,10 +629,17 @@ def admin_access_log():
     else:
         # All logs — query directly
         from plugins.ghrm.src.models.ghrm_access_log import GhrmAccessLog
+
         q = db.session.query(GhrmAccessLog).order_by(GhrmAccessLog.created_at.desc())
         total = q.count()
         items = q.offset((page - 1) * per_page).limit(per_page).all()
-        result = {"items": [i.to_dict() for i in items], "total": total, "page": page, "per_page": per_page, "pages": max(1, (total + per_page - 1) // per_page)}
+        result = {
+            "items": [i.to_dict() for i in items],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "pages": max(1, (total + per_page - 1) // per_page),
+        }
     return jsonify(result)
 
 
@@ -593,7 +686,14 @@ _DEFAULT_WIDGETS = {
     },
 }
 
-_WIDGET_ALLOWED_FIELDS = {"separator", "root_name", "root_slug", "show_category", "max_label_length", "css"}
+_WIDGET_ALLOWED_FIELDS = {
+    "separator",
+    "root_name",
+    "root_slug",
+    "show_category",
+    "max_label_length",
+    "css",
+}
 
 
 def _load_widgets() -> dict:
@@ -616,21 +716,41 @@ def get_widgets():
     Prefers the CMS widget (widget_type='vue-component', config.component_name='ghrm-breadcrumb')
     when one exists in the DB.  Falls back to widgets.json for backward compatibility.
     """
-    _BREADCRUMB_FIELDS = ("separator", "root_name", "root_slug", "show_category", "max_label_length", "css")
+    _BREADCRUMB_FIELDS = (
+        "separator",
+        "root_name",
+        "root_slug",
+        "show_category",
+        "max_label_length",
+        "css",
+    )
     try:
         from plugins.cms.src.models.cms_widget import CmsWidget as _CmsWidget
-        candidates = db.session.query(_CmsWidget).filter(
-            _CmsWidget.widget_type == "vue-component",
-            _CmsWidget.is_active.is_(True),
-        ).all()
+
+        candidates = (
+            db.session.query(_CmsWidget)
+            .filter(
+                _CmsWidget.widget_type == "vue-component",
+                _CmsWidget.is_active.is_(True),
+            )
+            .all()
+        )
         cms_widget = next(
-            (w for w in candidates if
-             (w.content_json or {}).get("component") == "CmsBreadcrumb"
-             or (w.config or {}).get("component_name") in ("CmsBreadcrumb", "ghrm-breadcrumb")),
+            (
+                w
+                for w in candidates
+                if (w.content_json or {}).get("component") == "CmsBreadcrumb"
+                or (w.config or {}).get("component_name")
+                in ("CmsBreadcrumb", "ghrm-breadcrumb")
+            ),
             None,
         )
         if cms_widget and cms_widget.config:
-            cfg = {k: cms_widget.config[k] for k in _BREADCRUMB_FIELDS if k in cms_widget.config}
+            cfg = {
+                k: cms_widget.config[k]
+                for k in _BREADCRUMB_FIELDS
+                if k in cms_widget.config
+            }
             cfg["id"] = "ghrm-breadcrumb"
             return jsonify({"widgets": [cfg]})
     except Exception:

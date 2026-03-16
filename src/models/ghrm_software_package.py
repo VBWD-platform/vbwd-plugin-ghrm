@@ -7,7 +7,13 @@ import secrets
 class GhrmSoftwarePackage(BaseModel):
     __tablename__ = "ghrm_software_package"
 
-    tariff_plan_id = db.Column(db.UUID, db.ForeignKey("tarif_plan.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    tariff_plan_id = db.Column(
+        db.UUID,
+        db.ForeignKey("tarif_plan.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
     name = db.Column(db.String(255), nullable=False)
     slug = db.Column(db.String(64), unique=True, nullable=False, index=True)
     author_name = db.Column(db.String(255), nullable=True)
@@ -15,16 +21,24 @@ class GhrmSoftwarePackage(BaseModel):
     github_owner = db.Column(db.String(128), nullable=False)
     github_repo = db.Column(db.String(128), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    github_protected_branch = db.Column(db.String(64), nullable=False, default="release")
+    github_protected_branch = db.Column(
+        db.String(64), nullable=False, default="release"
+    )
     github_installation_id = db.Column(db.String(64), nullable=True)
-    sync_api_key = db.Column(db.String(128), nullable=False, default=lambda: secrets.token_urlsafe(32))
+    sync_api_key = db.Column(
+        db.String(128), nullable=False, default=lambda: secrets.token_urlsafe(32)
+    )
     tech_specs = db.Column(db.JSON, nullable=True, default=dict)
     related_slugs = db.Column(db.JSON, nullable=True, default=list)
     download_counter = db.Column(db.Integer, nullable=False, default=0)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
 
-    __table_args__ = (db.UniqueConstraint("github_owner", "github_repo", name="uq_ghrm_pkg_owner_repo"),)
+    __table_args__ = (
+        db.UniqueConstraint(
+            "github_owner", "github_repo", name="uq_ghrm_pkg_owner_repo"
+        ),
+    )
 
     def to_dict(self) -> dict:
         return {

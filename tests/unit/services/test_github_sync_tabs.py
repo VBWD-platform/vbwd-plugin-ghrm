@@ -25,11 +25,16 @@ from plugins.ghrm.src.services.software_package_service import (
     SoftwarePackageService,
     GhrmPackageNotFoundError,
 )
-from plugins.ghrm.src.services.github_app_client import MockGithubAppClient, ReleaseDTO, ReleaseAsset
+from plugins.ghrm.src.services.github_app_client import (
+    MockGithubAppClient,
+    ReleaseDTO,
+    ReleaseAsset,
+)
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _make_package(
     pkg_id="pkg-1",
@@ -68,6 +73,7 @@ def _make_service(package_repo=None, sync_repo=None, github=None):
 
 # ── Suite ──────────────────────────────────────────────────────────────────────
 
+
 class TestSyncPopulatesOverviewTab:
     """Overview tab shows README.md content fetched from GitHub."""
 
@@ -92,7 +98,9 @@ class TestSyncPopulatesOverviewTab:
         sync_repo.find_by_package_id.return_value = None
         sync_repo.save.side_effect = capture_save
 
-        svc = _make_service(package_repo=package_repo, sync_repo=sync_repo, github=github)
+        svc = _make_service(
+            package_repo=package_repo, sync_repo=sync_repo, github=github
+        )
         svc.sync_package("test-sync-key")
 
         assert "obj" in captured_sync, "sync_repo.save was not called"
@@ -108,7 +116,7 @@ class TestSyncPopulatesOverviewTab:
 
         sync = MagicMock()
         sync.cached_readme = readme_content
-        sync.override_readme = None           # no admin override → use cached
+        sync.override_readme = None  # no admin override → use cached
         sync.cached_changelog = None
         sync.override_changelog = None
         sync.cached_docs = None
@@ -126,9 +134,9 @@ class TestSyncPopulatesOverviewTab:
         svc = _make_service(package_repo=package_repo, sync_repo=sync_repo)
         result = svc.get_package("vbwd-backend")
 
-        assert result["readme"] == readme_content, (
-            "Overview tab content should equal README.md from GitHub"
-        )
+        assert (
+            result["readme"] == readme_content
+        ), "Overview tab content should equal README.md from GitHub"
 
     def test_full_sync_then_get_pipeline_readme(self):
         """End-to-end: sync writes readme, then get_package reads it back."""
@@ -136,7 +144,7 @@ class TestSyncPopulatesOverviewTab:
 
         github = MockGithubAppClient()
         github.readme_content = readme
-        github.changelog_content = None        # no changelog for this test
+        github.changelog_content = None  # no changelog for this test
 
         pkg = _make_package()
         package_repo = MagicMock()
@@ -153,18 +161,22 @@ class TestSyncPopulatesOverviewTab:
             return s
 
         sync_repo = MagicMock()
-        sync_repo.find_by_package_id.return_value = None   # first call: no existing sync
+        sync_repo.find_by_package_id.return_value = None  # first call: no existing sync
         sync_repo.save.side_effect = capture_save
 
-        svc = _make_service(package_repo=package_repo, sync_repo=sync_repo, github=github)
+        svc = _make_service(
+            package_repo=package_repo, sync_repo=sync_repo, github=github
+        )
         svc.sync_package("test-sync-key")
 
         # Feed the saved sync object back into get_package
         sync_repo.find_by_package_id.return_value = saved["sync"]
         result = svc.get_package("vbwd-backend")
 
-        assert result["readme"] == readme, "README.md content must appear in Overview tab"
-        assert result["changelog"] is None   # no changelog file in this test
+        assert (
+            result["readme"] == readme
+        ), "README.md content must appear in Overview tab"
+        assert result["changelog"] is None  # no changelog file in this test
 
 
 class TestSyncPopulatesChangelogTab:
@@ -199,7 +211,9 @@ class TestSyncPopulatesChangelogTab:
         sync_repo.find_by_package_id.return_value = None
         sync_repo.save.side_effect = capture_save
 
-        svc = _make_service(package_repo=package_repo, sync_repo=sync_repo, github=github)
+        svc = _make_service(
+            package_repo=package_repo, sync_repo=sync_repo, github=github
+        )
         svc.sync_package("test-sync-key")
 
         assert "obj" in captured_sync
@@ -207,7 +221,9 @@ class TestSyncPopulatesChangelogTab:
 
     def test_get_package_returns_changelog_as_changelog_field(self):
         """get_package exposes cached_changelog under 'changelog' key (Changelog tab content)."""
-        changelog_content = "# Changelog\n\n## [1.0.0] - 2026-01-01\n- Initial release\n"
+        changelog_content = (
+            "# Changelog\n\n## [1.0.0] - 2026-01-01\n- Initial release\n"
+        )
 
         pkg = _make_package()
         package_repo = MagicMock()
@@ -217,7 +233,7 @@ class TestSyncPopulatesChangelogTab:
         sync.cached_readme = None
         sync.override_readme = None
         sync.cached_changelog = changelog_content
-        sync.override_changelog = None        # no admin override → use cached
+        sync.override_changelog = None  # no admin override → use cached
         sync.cached_docs = None
         sync.override_docs = None
         sync.cached_releases = []
@@ -233,14 +249,14 @@ class TestSyncPopulatesChangelogTab:
         svc = _make_service(package_repo=package_repo, sync_repo=sync_repo)
         result = svc.get_package("vbwd-backend")
 
-        assert result["changelog"] == changelog_content, (
-            "Changelog tab content should equal CHANGELOG.md from GitHub"
-        )
+        assert (
+            result["changelog"] == changelog_content
+        ), "Changelog tab content should equal CHANGELOG.md from GitHub"
 
     def test_no_changelog_file_returns_none(self):
         """If GitHub repo has no CHANGELOG.md, changelog field is None (tab shows empty state)."""
         github = MockGithubAppClient()
-        github.changelog_content = None       # simulates missing CHANGELOG.md
+        github.changelog_content = None  # simulates missing CHANGELOG.md
 
         pkg = _make_package()
         package_repo = MagicMock()
@@ -256,7 +272,9 @@ class TestSyncPopulatesChangelogTab:
         sync_repo.find_by_package_id.return_value = None
         sync_repo.save.side_effect = capture_save
 
-        svc = _make_service(package_repo=package_repo, sync_repo=sync_repo, github=github)
+        svc = _make_service(
+            package_repo=package_repo, sync_repo=sync_repo, github=github
+        )
         svc.sync_package("test-sync-key")
 
         assert captured["obj"].cached_changelog is None
@@ -288,7 +306,9 @@ class TestSyncPopulatesBothTabsTogether:
         sync_repo.find_by_package_id.return_value = None
         sync_repo.save.side_effect = capture_save
 
-        svc = _make_service(package_repo=package_repo, sync_repo=sync_repo, github=github)
+        svc = _make_service(
+            package_repo=package_repo, sync_repo=sync_repo, github=github
+        )
         svc.sync_package("test-sync-key")
 
         assert captured["obj"].cached_readme == readme
@@ -323,7 +343,7 @@ class TestSyncPopulatesBothTabsTogether:
         svc = _make_service(package_repo=package_repo, sync_repo=sync_repo)
         result = svc.get_package("vbwd-backend")
 
-        assert result["readme"] == readme,     "Overview tab must show README.md"
+        assert result["readme"] == readme, "Overview tab must show README.md"
         assert result["changelog"] == changelog, "Changelog tab must show CHANGELOG.md"
 
     def test_github_fetch_called_with_correct_owner_and_repo(self):
@@ -355,15 +375,17 @@ class TestSyncPopulatesBothTabsTogether:
         github.fetch_readme = spy_readme
         github.fetch_changelog = spy_changelog
 
-        svc = _make_service(package_repo=package_repo, sync_repo=sync_repo, github=github)
+        svc = _make_service(
+            package_repo=package_repo, sync_repo=sync_repo, github=github
+        )
         svc.sync_package("test-sync-key")
 
-        assert calls_readme == [("dantweb", "vbwd-backend")], (
-            "fetch_readme must be called with the package's github_owner and github_repo"
-        )
-        assert calls_changelog == [("dantweb", "vbwd-backend")], (
-            "fetch_changelog must be called with the package's github_owner and github_repo"
-        )
+        assert calls_readme == [
+            ("dantweb", "vbwd-backend")
+        ], "fetch_readme must be called with the package's github_owner and github_repo"
+        assert calls_changelog == [
+            ("dantweb", "vbwd-backend")
+        ], "fetch_changelog must be called with the package's github_owner and github_repo"
 
 
 class TestAdminOverrideTakesPrecedenceOverGitHub:
@@ -376,15 +398,15 @@ class TestAdminOverrideTakesPrecedenceOverGitHub:
     def test_overview_uses_admin_override_not_github_readme(self):
         """When override_readme is set, Overview tab shows admin content, not README.md."""
         github_readme = "# vbwd-backend (GitHub version)"
-        admin_readme  = "# vbwd-backend (Admin custom overview)"
+        admin_readme = "# vbwd-backend (Admin custom overview)"
 
         pkg = _make_package()
         package_repo = MagicMock()
         package_repo.find_by_slug.return_value = pkg
 
         sync = MagicMock()
-        sync.cached_readme    = github_readme
-        sync.override_readme  = admin_readme   # ← admin override
+        sync.cached_readme = github_readme
+        sync.override_readme = admin_readme  # ← admin override
         sync.cached_changelog = None
         sync.override_changelog = None
         sync.cached_docs = None
@@ -402,9 +424,9 @@ class TestAdminOverrideTakesPrecedenceOverGitHub:
         svc = _make_service(package_repo=package_repo, sync_repo=sync_repo)
         result = svc.get_package("vbwd-backend")
 
-        assert result["readme"] == admin_readme, (
-            "Admin override_readme must take precedence over GitHub cached_readme"
-        )
+        assert (
+            result["readme"] == admin_readme
+        ), "Admin override_readme must take precedence over GitHub cached_readme"
         assert result["readme"] != github_readme
 
     def test_sync_updates_cached_but_not_override(self):
@@ -442,7 +464,9 @@ class TestAdminOverrideTakesPrecedenceOverGitHub:
         sync_repo.find_by_package_id.return_value = existing_sync
         sync_repo.save.side_effect = capture_save
 
-        svc = _make_service(package_repo=package_repo, sync_repo=sync_repo, github=github)
+        svc = _make_service(
+            package_repo=package_repo, sync_repo=sync_repo, github=github
+        )
         svc.sync_package("test-sync-key")
 
         # cached_readme was updated by sync
@@ -462,8 +486,10 @@ class TestVersionsTabFromReleases:
                 date="2026-03-01T10:00:00",
                 notes="## What's Changed\n- Added plugin bundles\n- Token refund flow",
                 assets=[
-                    ReleaseAsset(name="vbwd-backend-v2.1.0.tar.gz",
-                                 url="https://github.com/dantweb/vbwd-backend/releases/download/v2.1.0/vbwd-backend-v2.1.0.tar.gz"),
+                    ReleaseAsset(
+                        name="vbwd-backend-v2.1.0.tar.gz",
+                        url="https://github.com/dantweb/vbwd-backend/releases/download/v2.1.0/vbwd-backend-v2.1.0.tar.gz",
+                    ),
                 ],
             ),
             ReleaseDTO(
@@ -491,7 +517,9 @@ class TestVersionsTabFromReleases:
         sync_repo.find_by_package_id.return_value = None
         sync_repo.save.side_effect = capture_save
 
-        svc = _make_service(package_repo=package_repo, sync_repo=sync_repo, github=github)
+        svc = _make_service(
+            package_repo=package_repo, sync_repo=sync_repo, github=github
+        )
         svc.sync_package("test-sync-key")
 
         stored = captured["obj"].cached_releases
@@ -508,8 +536,12 @@ class TestVersionsTabFromReleases:
         """sync_package sets latest_version to the tag of the most-recent release."""
         github = MockGithubAppClient()
         github.releases = [
-            ReleaseDTO(tag="v3.0.0", date="2026-03-10T00:00:00", notes="Latest", assets=[]),
-            ReleaseDTO(tag="v2.0.0", date="2026-01-01T00:00:00", notes="Older",  assets=[]),
+            ReleaseDTO(
+                tag="v3.0.0", date="2026-03-10T00:00:00", notes="Latest", assets=[]
+            ),
+            ReleaseDTO(
+                tag="v2.0.0", date="2026-01-01T00:00:00", notes="Older", assets=[]
+            ),
         ]
 
         pkg = _make_package()
@@ -526,7 +558,9 @@ class TestVersionsTabFromReleases:
         sync_repo.find_by_package_id.return_value = None
         sync_repo.save.side_effect = capture_save
 
-        svc = _make_service(package_repo=package_repo, sync_repo=sync_repo, github=github)
+        svc = _make_service(
+            package_repo=package_repo, sync_repo=sync_repo, github=github
+        )
         svc.sync_package("test-sync-key")
 
         assert captured["obj"].latest_version == "v3.0.0"

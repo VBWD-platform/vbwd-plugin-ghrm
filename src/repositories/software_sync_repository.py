@@ -8,7 +8,11 @@ class GhrmSoftwareSyncRepository:
         self.session = session
 
     def find_by_package_id(self, package_id: str) -> Optional[GhrmSoftwareSync]:
-        return self.session.query(GhrmSoftwareSync).filter(GhrmSoftwareSync.software_package_id == package_id).first()
+        return (
+            self.session.query(GhrmSoftwareSync)
+            .filter(GhrmSoftwareSync.software_package_id == package_id)
+            .first()
+        )
 
     def save(self, sync: GhrmSoftwareSync) -> GhrmSoftwareSync:
         self.session.add(sync)
