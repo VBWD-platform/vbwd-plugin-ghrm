@@ -1,0 +1,94 @@
+{
+  "tabs": [
+    {
+      "id": "github",
+      "label": "GitHub App",
+      "fields": [
+        {
+          "key": "github_app_id",
+          "label": "GitHub App ID",
+          "component": "input",
+          "inputType": "text",
+          "description": "Numeric GitHub App ID from your GitHub App settings"
+        },
+        {
+          "key": "github_installation_id",
+          "label": "GitHub Installation ID",
+          "component": "input",
+          "inputType": "text",
+          "description": "Installation ID of the GitHub App on your organisation/account"
+        },
+        {
+          "key": "github_app_private_key_path",
+          "label": "Private Key Path",
+          "component": "input",
+          "inputType": "text",
+          "description": "Absolute path to the .pem private key file inside the container (e.g. /app/plugins/ghrm/github-app.pem)"
+        }
+      ]
+    },
+    {
+      "id": "oauth",
+      "label": "OAuth",
+      "fields": [
+        {
+          "key": "github_oauth_client_id",
+          "label": "OAuth Client ID",
+          "component": "input",
+          "inputType": "text",
+          "description": "Client ID of the GitHub OAuth App used for user authentication"
+        },
+        {
+          "key": "github_oauth_client_secret",
+          "label": "OAuth Client Secret",
+          "component": "input",
+          "inputType": "password",
+          "description": "Client secret of the GitHub OAuth App"
+        },
+        {
+          "key": "github_oauth_redirect_uri",
+          "label": "OAuth Redirect URI",
+          "component": "input",
+          "inputType": "text",
+          "description": "Full callback URL registered in the GitHub OAuth App (e.g. https://yourdomain.com/software/github/callback)"
+        }
+      ]
+    },
+    {
+      "id": "catalogue",
+      "label": "Catalogue",
+      "fields": [
+        {
+          "key": "software_category_slugs",
+          "label": "Software Category Slugs",
+          "component": "input",
+          "inputType": "text",
+          "description": "Comma-separated list of tariff plan category slugs that expose the Software tab on plan edit forms (e.g. backend,fe-user,fe-admin)"
+        },
+        {
+          "key": "software_catalogue_cms_page_slug",
+          "label": "Catalogue CMS Page Slug",
+          "component": "input",
+          "inputType": "text",
+          "description": "Slug of the CMS page used for category index and package list pages — its layout and style sheet will be applied. Run populate-ghrm to create the default page."
+        },
+        {
+          "key": "software_detail_cms_page_slug",
+          "label": "Detail Page CMS Page Slug",
+          "component": "input",
+          "inputType": "text",
+          "description": "Slug of the CMS page used for package detail pages — its layout and style sheet will be applied. Run populate-ghrm to create the default page."
+        },
+        {
+          "key": "grace_period_fallback_days",
+          "label": "Grace Period (days)",
+          "component": "input",
+          "inputType": "number",
+          "min": 0,
+          "max": 90,
+          "description": "Days after subscription cancellation before GitHub collaborator access is revoked"
+        }
+      ]
+    }
+  ]
+}

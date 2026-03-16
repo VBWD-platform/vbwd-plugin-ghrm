@@ -1,0 +1,12 @@
+{
+  "github_app_id": "",
+  "github_app_private_key_path": "/app/plugins/ghrm/github-app.pem",
+  "github_installation_id": "",
+  "github_oauth_client_id": "",
+  "github_oauth_client_secret": "",
+  "github_oauth_redirect_uri": "http://localhost:8080/ghrm/auth/github/callback",
+  "software_category_slugs": ["backend", "fe-user", "fe-admin"],
+  "software_catalogue_cms_page_slug": "ghrm-software-catalogue",
+  "software_detail_cms_page_slug": "ghrm-software-detail",
+  "grace_period_fallback_days": 7
+}

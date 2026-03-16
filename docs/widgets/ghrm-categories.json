@@ -1,0 +1,1 @@
+{"id": "704cc0cc-f6f0-4640-a633-1e493626af62", "slug": "ghrm-categories", "name": "GHRM Categories", "widget_type": "vue-component", "content_json": {"component": "GhrmCatalogueContent", "items_per_page": 12}, "source_css": null, "config": null, "sort_order": 0, "is_active": true, "created_at": "2026-03-15T20:18:26.125602", "updated_at": "2026-03-15T20:18:26.125604"}

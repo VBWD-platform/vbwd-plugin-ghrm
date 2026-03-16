@@ -1,0 +1,1 @@
+{"id": "e4d21f52-cf4a-4251-a0af-58220731d805", "slug": "ghrm-software-detail", "name": "GHRM Software Detail", "widget_type": "vue-component", "content_json": {"component": "GhrmPackageDetail", "items_per_page": 12}, "source_css": null, "config": null, "sort_order": 0, "is_active": true, "created_at": "2026-03-15T20:18:26.126078", "updated_at": "2026-03-15T20:18:26.126079"}
