@@ -16,22 +16,22 @@ from decimal import Decimal
 
 sys.path.insert(0, "/app")
 
-from src.extensions import Session
-from src.models.tarif_plan import TarifPlan
-from src.models.tarif_plan_category import TarifPlanCategory
-from src.models.price import Price
-from src.models.enums import BillingPeriod
-from src.models.currency import Currency
-from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
-from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync
-from plugins.cms.src.models.cms_category import CmsCategory
-from plugins.cms.src.models.cms_style import (
+from src.extensions import Session  # noqa: E402
+from src.models.tarif_plan import TarifPlan  # noqa: E402
+from src.models.tarif_plan_category import TarifPlanCategory  # noqa: E402
+from src.models.price import Price  # noqa: E402
+from src.models.enums import BillingPeriod  # noqa: E402
+from src.models.currency import Currency  # noqa: E402
+from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage  # noqa: E402
+from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync  # noqa: E402
+from plugins.cms.src.models.cms_category import CmsCategory  # noqa: E402
+from plugins.cms.src.models.cms_style import (  # noqa: E402, F401
     CmsStyle,
-)  # noqa: F401 — required for FK resolution
-from plugins.cms.src.models.cms_layout import CmsLayout
-from plugins.cms.src.models.cms_widget import CmsWidget
-from plugins.cms.src.models.cms_page import CmsPage
-from plugins.cms.src.models.cms_layout_widget import CmsLayoutWidget
+)  # required for FK resolution
+from plugins.cms.src.models.cms_layout import CmsLayout  # noqa: E402
+from plugins.cms.src.models.cms_widget import CmsWidget  # noqa: E402
+from plugins.cms.src.models.cms_page import CmsPage  # noqa: E402
+from plugins.cms.src.models.cms_layout_widget import CmsLayoutWidget  # noqa: E402
 
 # ── Load plugin config to get category slugs ────────────────────────────────
 

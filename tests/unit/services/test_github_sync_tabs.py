@@ -488,7 +488,7 @@ class TestVersionsTabFromReleases:
                 assets=[
                     ReleaseAsset(
                         name="vbwd-backend-v2.1.0.tar.gz",
-                        url="https://github.com/dantweb/vbwd-backend/releases/download/v2.1.0/vbwd-backend-v2.1.0.tar.gz",
+                        url="https://github.com/dantweb/vbwd-backend/releases/download/v2.1.0/vbwd-backend-v2.1.0.tar.gz",  # noqa: E501
                     ),
                 ],
             ),

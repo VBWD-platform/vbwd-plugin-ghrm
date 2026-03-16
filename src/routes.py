@@ -160,7 +160,8 @@ def _cfg() -> dict:
 @ghrm_bp.route("/api/v1/ghrm/config", methods=["GET"])
 def get_public_config():
     """Return public GHRM config needed by the frontend (layout slugs, etc.)."""
-    import json as _json, os as _os
+    import json as _json  # noqa: E401
+    import os as _os
 
     cfg = _cfg()
 
@@ -190,7 +191,8 @@ def get_public_config():
 @ghrm_bp.route("/api/v1/ghrm/categories", methods=["GET"])
 def list_categories():
     """Return the configured software category slugs and their DB names as labels."""
-    import json as _json, os as _os
+    import json as _json  # noqa: E401
+    import os as _os
     from src.extensions import db
     from src.models.tarif_plan_category import TarifPlanCategory
 

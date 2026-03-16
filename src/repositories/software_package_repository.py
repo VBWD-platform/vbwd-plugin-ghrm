@@ -57,8 +57,8 @@ class GhrmSoftwarePackageRepository:
         query: Optional[str] = None,
     ) -> Dict[str, Any]:
         q = self.session.query(GhrmSoftwarePackage).filter(
-            GhrmSoftwarePackage.is_active == True
-        )  # noqa
+            GhrmSoftwarePackage.is_active == True  # noqa: E712
+        )
         if category_slug:
             q = (
                 q.join(TarifPlan, GhrmSoftwarePackage.tariff_plan_id == TarifPlan.id)
