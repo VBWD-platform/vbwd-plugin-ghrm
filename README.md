@@ -228,3 +228,14 @@ After configuring the plugin, create a package for each private GitHub repo:
 When a subscription is cancelled, the subscriber's GitHub collaborator access is not removed immediately. The `grace_period_fallback_days` setting controls how many days they retain access. After the grace period expires the background scheduler calls `revoke_access` and removes the collaborator from all repos linked to that plan.
 
 Default: **7 days**. Set to `0` to revoke immediately on cancellation.
+
+---
+
+## Related
+
+| | Repository |
+|-|------------|
+| 👤 Frontend (user) | [vbwd-fe-user-plugin-ghrm](https://github.com/VBWD-platform/vbwd-fe-user-plugin-ghrm) |
+| 🛠 Frontend (admin) | [vbwd-fe-admin-plugin-ghrm](https://github.com/VBWD-platform/vbwd-fe-admin-plugin-ghrm) |
+
+**Core:** [vbwd-backend](https://github.com/VBWD-platform/vbwd-backend)
