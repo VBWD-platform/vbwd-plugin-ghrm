@@ -13,6 +13,7 @@ import sys
 import json
 import os
 from decimal import Decimal
+from typing import List, Optional, cast
 
 sys.path.insert(0, "/app")
 
@@ -407,7 +408,7 @@ try:
             print(f"  Exists  plan : {entry['plan_slug']}")
 
         # Attach plan to categories (create category if missing)
-        for cat_slug in entry["categories"]:
+        for cat_slug in cast(List[str], entry["categories"]):
             cat = session.query(TarifPlanCategory).filter_by(slug=cat_slug).first()
             if not cat:
                 cat = TarifPlanCategory(
@@ -461,7 +462,7 @@ try:
     print("\n=== Software Sync Demo Content ===")
 
     for entry in SOFTWARE_PACKAGES:
-        pkg = (
+        pkg: Optional[GhrmSoftwarePackage] = (
             session.query(GhrmSoftwarePackage).filter_by(slug=entry["pkg_slug"]).first()
         )
         if not pkg:
@@ -483,8 +484,8 @@ try:
         if not sync.cached_readme and not sync.override_readme:
             name = entry["pkg_name"]
             desc = entry.get("description", "")
-            owner = entry["github_owner"]
-            repo = entry["github_repo"]
+            owner = cast(str, entry["github_owner"])
+            repo = cast(str, entry["github_repo"])
             sync.override_readme = (
                 f"# {name}\n\n"
                 f"{desc}\n\n"
@@ -608,7 +609,7 @@ try:
         widget, created = get_or_create(
             session,
             CmsWidget,
-            slug=w["slug"],
+            slug=cast(str, w["slug"]),
             name=w["name"],
             widget_type=w["widget_type"],
             content_json=w["content_json"],
@@ -812,7 +813,7 @@ try:
     print("  CMS category    : ghrm")
     print(f"  Layouts         : {CATALOGUE_LAYOUT_SLUG}, {DETAIL_LAYOUT_SLUG}")
     print(
-        f"  Widgets         : {', '.join(w['slug'] for w in WIDGETS)} (vue-component)"
+        f"  Widgets         : {', '.join(cast(str, w['slug']) for w in WIDGETS)} (vue-component)"
     )
     print(f"  Template pages  : {CATALOGUE_PAGE_SLUG}, {DETAIL_PAGE_SLUG}")
     print(f"  Content pages   : category + {len(CATEGORY_SLUGS)} category pages")
