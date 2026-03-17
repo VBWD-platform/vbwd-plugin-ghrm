@@ -22,7 +22,9 @@ from src.models.tarif_plan_category import TarifPlanCategory  # noqa: E402
 from src.models.price import Price  # noqa: E402
 from src.models.enums import BillingPeriod  # noqa: E402
 from src.models.currency import Currency  # noqa: E402
-from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage  # noqa: E402
+from plugins.ghrm.src.models.ghrm_software_package import (
+    GhrmSoftwarePackage,
+)  # noqa: E402
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync  # noqa: E402
 from plugins.cms.src.models.cms_category import CmsCategory  # noqa: E402
 from plugins.cms.src.models.cms_style import (  # noqa: E402, F401
