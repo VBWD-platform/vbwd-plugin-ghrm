@@ -439,7 +439,7 @@ try:
             session.flush()
             print(f"  Exists  pkg  : {entry['pkg_slug']}")
         else:
-            pkg = GhrmSoftwarePackage(
+            pkg: Optional[GhrmSoftwarePackage] = GhrmSoftwarePackage(
                 tariff_plan_id=plan.id,
                 name=entry["pkg_name"],
                 slug=entry["pkg_slug"],
@@ -462,7 +462,7 @@ try:
     print("\n=== Software Sync Demo Content ===")
 
     for entry in SOFTWARE_PACKAGES:
-        pkg: Optional[GhrmSoftwarePackage] = (
+        pkg = (
             session.query(GhrmSoftwarePackage).filter_by(slug=entry["pkg_slug"]).first()
         )
         if not pkg:
