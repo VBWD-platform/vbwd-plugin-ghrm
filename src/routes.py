@@ -36,9 +36,8 @@ Admin (require_admin):
 import json
 import logging
 import os
-import uuid
 import secrets
-from flask import Blueprint, jsonify, request, redirect, g, current_app
+from flask import Blueprint, jsonify, request, g, current_app
 from src.extensions import db
 from src.middleware.auth import require_auth, require_admin
 
@@ -62,7 +61,6 @@ from plugins.ghrm.src.services.software_package_service import (
 from plugins.ghrm.src.services.github_access_service import (
     GithubAccessService,
     GhrmOAuthError,
-    GhrmGithubNotConnectedError,
 )
 from plugins.ghrm.src.services.github_app_client import IGithubAppClient
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage

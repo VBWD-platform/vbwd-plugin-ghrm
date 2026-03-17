@@ -1,7 +1,6 @@
 """Unit tests for SoftwarePackageService."""
 import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime
+from unittest.mock import MagicMock
 
 from plugins.ghrm.src.services.software_package_service import (
     SoftwarePackageService,

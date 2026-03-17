@@ -1,5 +1,4 @@
 """Unit tests for find_by_tariff_plan_id (repo), get_by_tariff_plan_id (service), and the route."""
-import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -74,7 +73,6 @@ class TestFindByTariffPlanId:
         from plugins.ghrm.src.repositories.software_package_repository import (
             GhrmSoftwarePackageRepository,
         )
-        from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 
         mock_query = MagicMock()
         mock_query.filter_by.return_value.first.return_value = None

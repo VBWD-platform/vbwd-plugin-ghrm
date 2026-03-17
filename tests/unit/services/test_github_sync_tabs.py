@@ -17,20 +17,16 @@ These tests use the in-process service layer (no HTTP).
 The MockGithubAppClient simulates GitHub; its `readme_content` / `changelog_content`
 attributes represent what would come from README.md / CHANGELOG.md on GitHub.
 """
-import pytest
-from unittest.mock import MagicMock, call
-from datetime import datetime
+from unittest.mock import MagicMock
 
 from plugins.ghrm.src.services.software_package_service import (
     SoftwarePackageService,
-    GhrmPackageNotFoundError,
 )
 from plugins.ghrm.src.services.github_app_client import (
     MockGithubAppClient,
     ReleaseDTO,
     ReleaseAsset,
 )
-from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

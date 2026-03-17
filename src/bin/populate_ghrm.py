@@ -22,9 +22,9 @@ from src.models.tarif_plan_category import TarifPlanCategory  # noqa: E402
 from src.models.price import Price  # noqa: E402
 from src.models.enums import BillingPeriod  # noqa: E402
 from src.models.currency import Currency  # noqa: E402
-from plugins.ghrm.src.models.ghrm_software_package import (
+from plugins.ghrm.src.models.ghrm_software_package import (  # noqa: E402
     GhrmSoftwarePackage,
-)  # noqa: E402
+)
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync  # noqa: E402
 from plugins.cms.src.models.cms_category import CmsCategory  # noqa: E402
 from plugins.cms.src.models.cms_style import (  # noqa: E402, F401
@@ -809,7 +809,7 @@ try:
     session.commit()
 
     print("\n=== Done ===")
-    print(f"  CMS category    : ghrm")
+    print("  CMS category    : ghrm")
     print(f"  Layouts         : {CATALOGUE_LAYOUT_SLUG}, {DETAIL_LAYOUT_SLUG}")
     print(
         f"  Widgets         : {', '.join(w['slug'] for w in WIDGETS)} (vue-component)"
@@ -817,7 +817,7 @@ try:
     print(f"  Template pages  : {CATALOGUE_PAGE_SLUG}, {DETAIL_PAGE_SLUG}")
     print(f"  Content pages   : category + {len(CATEGORY_SLUGS)} category pages")
     print(
-        f"\n  Assign a CMS Style to a template page in the admin to override catalogue styles."
+        "\n  Assign a CMS Style to a template page in the admin to override catalogue styles."
     )
 
 except Exception:

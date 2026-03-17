@@ -1,12 +1,11 @@
 """Unit tests for GithubAccessService."""
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from plugins.ghrm.src.services.github_access_service import (
     GithubAccessService,
     GhrmOAuthError,
-    GhrmGithubNotConnectedError,
 )
 from plugins.ghrm.src.services.github_app_client import MockGithubAppClient
 from plugins.ghrm.src.models.ghrm_user_github_access import AccessStatus
@@ -172,7 +171,6 @@ class TestDisconnectGithub:
         svc.disconnect_github("user-1")
 
         # Collaborator removed
-        key = (pkg.github_owner, pkg.github_repo)
         # remove_collaborator was called (MockGithubAppClient records nothing for discard on empty)
         # We verify log was called
         log_repo.log.assert_called()

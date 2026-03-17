@@ -11,7 +11,7 @@ _FAKE_TOKEN = "fake-admin-token"
 
 
 def _fake_admin_user():
-    from src.models.enums import UserRole, UserStatus
+    from src.models.enums import UserRole
 
     user = MagicMock()
     user.id = _FAKE_USER_ID
