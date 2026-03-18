@@ -2,7 +2,7 @@
 import logging
 import secrets
 from datetime import datetime
-from src.utils.datetime_utils import utcnow
+from vbwd.utils.datetime_utils import utcnow
 from typing import List, Dict, Any, Optional
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync

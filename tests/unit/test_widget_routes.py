@@ -11,7 +11,7 @@ _FAKE_TOKEN = "fake-admin-token"
 
 
 def _fake_admin_user():
-    from src.models.enums import UserRole
+    from vbwd.models.enums import UserRole
 
     user = MagicMock()
     user.id = _FAKE_USER_ID
@@ -25,11 +25,11 @@ def _auth_patches():
     """Return context managers that bypass require_auth + require_admin."""
     return [
         patch(
-            "src.services.auth_service.AuthService.verify_token",
+            "vbwd.services.auth_service.AuthService.verify_token",
             return_value=_FAKE_USER_ID,
         ),
         patch(
-            "src.repositories.user_repository.UserRepository.find_by_id",
+            "vbwd.repositories.user_repository.UserRepository.find_by_id",
             return_value=_fake_admin_user(),
         ),
     ]

@@ -38,8 +38,8 @@ import logging
 import os
 import secrets
 from flask import Blueprint, jsonify, request, g, current_app
-from src.extensions import db
-from src.middleware.auth import require_auth, require_admin
+from vbwd.extensions import db
+from vbwd.middleware.auth import require_auth, require_admin
 
 from plugins.ghrm.src.repositories.software_package_repository import (
     GhrmSoftwarePackageRepository,
@@ -191,8 +191,8 @@ def list_categories():
     """Return the configured software category slugs and their DB names as labels."""
     import json as _json  # noqa: E401
     import os as _os
-    from src.extensions import db
-    from src.models.tarif_plan_category import TarifPlanCategory
+    from vbwd.extensions import db
+    from vbwd.models.tarif_plan_category import TarifPlanCategory
 
     cfg = _cfg()
     slugs = cfg.get("software_category_slugs") or []
@@ -319,7 +319,7 @@ def github_oauth_start():
     nonce = secrets.token_urlsafe(16)
     # Store nonce in Redis with 10-min TTL
     try:
-        from src.extensions import redis_client
+        from vbwd.extensions import redis_client
 
         redis_client.setex(f"ghrm:oauth:nonce:{user_id}", 600, nonce)
     except Exception:
@@ -356,7 +356,7 @@ def github_oauth_callback():
         # Verify nonce
         nonce = payload.get("nonce", "")
         try:
-            from src.extensions import redis_client
+            from vbwd.extensions import redis_client
 
             stored = redis_client.get(f"ghrm:oauth:nonce:{user_id}")
             if not stored or stored.decode() != nonce:

@@ -1,6 +1,6 @@
 """GhrmUserGithubAccess — stores verified OAuth identity and deploy token per user."""
-from src.extensions import db
-from src.models.base import BaseModel
+from vbwd.extensions import db
+from vbwd.models.base import BaseModel
 
 
 class AccessStatus:

@@ -1,9 +1,9 @@
 """GhrmSoftwarePackageRepository — data access for software packages."""
 from typing import Optional, List, Dict, Any
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
-from src.models.tarif_plan import TarifPlan
-from src.models.tarif_plan_category import TarifPlanCategory, tarif_plan_category_plans
-from src.extensions import db
+from vbwd.models.tarif_plan import TarifPlan
+from vbwd.models.tarif_plan_category import TarifPlanCategory, tarif_plan_category_plans
+from vbwd.extensions import db
 
 
 class GhrmSoftwarePackageRepository:

@@ -17,12 +17,12 @@ from typing import List, Optional, cast
 
 sys.path.insert(0, "/app")
 
-from src.extensions import Session  # noqa: E402
-from src.models.tarif_plan import TarifPlan  # noqa: E402
-from src.models.tarif_plan_category import TarifPlanCategory  # noqa: E402
-from src.models.price import Price  # noqa: E402
-from src.models.enums import BillingPeriod  # noqa: E402
-from src.models.currency import Currency  # noqa: E402
+from vbwd.extensions import Session  # noqa: E402
+from vbwd.models.tarif_plan import TarifPlan  # noqa: E402
+from vbwd.models.tarif_plan_category import TarifPlanCategory  # noqa: E402
+from vbwd.models.price import Price  # noqa: E402
+from vbwd.models.enums import BillingPeriod  # noqa: E402
+from vbwd.models.currency import Currency  # noqa: E402
 from plugins.ghrm.src.models.ghrm_software_package import (  # noqa: E402
     GhrmSoftwarePackage,
 )

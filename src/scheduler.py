@@ -10,7 +10,7 @@ def revoke_expired_grace_access():
     Revokes all ghrm_user_github_access records where grace period has expired.
     """
     try:
-        from src.extensions import db
+        from vbwd.extensions import db
         from plugins.ghrm.src.repositories.user_github_access_repository import (
             GhrmUserGithubAccessRepository,
         )

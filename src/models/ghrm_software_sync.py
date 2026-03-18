@@ -1,6 +1,6 @@
 """GhrmSoftwareSync — cached GitHub data for a software package."""
-from src.extensions import db
-from src.models.base import BaseModel
+from vbwd.extensions import db
+from vbwd.models.base import BaseModel
 
 
 class GhrmSoftwareSync(BaseModel):

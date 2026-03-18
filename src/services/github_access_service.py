@@ -1,6 +1,6 @@
 """GithubAccessService — manages GitHub OAuth identity and repo collaborator lifecycle."""
 from datetime import timedelta
-from src.utils.datetime_utils import utcnow
+from vbwd.utils.datetime_utils import utcnow
 from typing import Optional, Dict, Any
 from plugins.ghrm.src.models.ghrm_user_github_access import (
     GhrmUserGithubAccess,

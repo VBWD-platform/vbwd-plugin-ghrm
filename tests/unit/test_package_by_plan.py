@@ -130,7 +130,7 @@ class TestGetByTariffPlanId:
 
 class TestGetPackageByPlanRoute:
     def _app(self):
-        from src.app import create_app
+        from vbwd.app import create_app
 
         return create_app(
             {

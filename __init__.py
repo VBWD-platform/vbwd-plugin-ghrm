@@ -1,6 +1,6 @@
 """GHRM — GitHub Repo Manager plugin."""
 from typing import Optional, Dict, Any, TYPE_CHECKING
-from src.plugins.base import BasePlugin, PluginMetadata
+from vbwd.plugins.base import BasePlugin, PluginMetadata
 
 if TYPE_CHECKING:
     from flask import Blueprint
@@ -55,7 +55,7 @@ class GhrmPlugin(BasePlugin):
     def register_event_handlers(self, bus: Any) -> None:
         """Subscribe GHRM subscription lifecycle handlers to EventBus."""
         try:
-            from src.extensions import db
+            from vbwd.extensions import db
             from plugins.ghrm.src.repositories.user_github_access_repository import (
                 GhrmUserGithubAccessRepository,
             )
