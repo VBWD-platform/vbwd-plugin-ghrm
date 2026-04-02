@@ -9,7 +9,7 @@ class GhrmSoftwarePackage(BaseModel):
 
     tariff_plan_id = db.Column(
         db.UUID,
-        db.ForeignKey("tarif_plan.id", ondelete="CASCADE"),
+        db.ForeignKey("vbwd_tarif_plan.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,

@@ -14,7 +14,7 @@ class GhrmUserGithubAccess(BaseModel):
 
     user_id = db.Column(
         db.UUID,
-        db.ForeignKey("user.id", ondelete="CASCADE"),
+        db.ForeignKey("vbwd_user.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,

@@ -15,7 +15,7 @@ class GhrmAccessLog(BaseModel):
 
     user_id = db.Column(
         db.UUID,
-        db.ForeignKey("user.id", ondelete="SET NULL"),
+        db.ForeignKey("vbwd_user.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
