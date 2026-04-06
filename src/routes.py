@@ -39,7 +39,7 @@ import os
 import secrets
 from flask import Blueprint, jsonify, request, g, current_app
 from vbwd.extensions import db
-from vbwd.middleware.auth import require_auth, require_admin
+from vbwd.middleware.auth import require_auth, require_admin, require_permission
 
 from plugins.ghrm.src.repositories.software_package_repository import (
     GhrmSoftwarePackageRepository,
@@ -409,6 +409,7 @@ def get_access_status():
 @ghrm_bp.route("/api/v1/admin/ghrm/packages", methods=["GET"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.view")
 def admin_list_packages():
     page = int(request.args.get("page", 1))
     per_page = min(int(request.args.get("per_page", 20)), 100)
@@ -435,6 +436,7 @@ def admin_list_packages():
 @ghrm_bp.route("/api/v1/admin/ghrm/packages", methods=["POST"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.manage")
 def admin_create_package():
     body = request.json or {}
     required = ("name", "slug", "github_owner", "github_repo", "tariff_plan_id")
@@ -465,6 +467,7 @@ def admin_create_package():
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>", methods=["PUT"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.manage")
 def admin_update_package(pkg_id):
     repo = GhrmSoftwarePackageRepository(db.session)
     pkg = repo.find_by_id(pkg_id)
@@ -516,6 +519,7 @@ def admin_update_package(pkg_id):
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>", methods=["DELETE"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.manage")
 def admin_delete_package(pkg_id):
     repo = GhrmSoftwarePackageRepository(db.session)
     if not repo.delete(pkg_id):
@@ -526,6 +530,7 @@ def admin_delete_package(pkg_id):
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>/rotate-key", methods=["POST"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.manage")
 def admin_rotate_key(pkg_id):
     try:
         new_key = _pkg_svc().rotate_api_key(pkg_id)
@@ -537,6 +542,7 @@ def admin_rotate_key(pkg_id):
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>/sync", methods=["POST"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.manage")
 def admin_sync_package(pkg_id):
     repo = GhrmSoftwarePackageRepository(db.session)
     pkg = repo.find_by_id(pkg_id)
@@ -560,6 +566,7 @@ _VALID_PREVIEW_FIELDS = {"readme", "changelog", "screenshots"}
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>/preview/<field>", methods=["GET"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.view")
 def admin_preview_field(pkg_id, field):
     if field not in _VALID_PREVIEW_FIELDS:
         return (
@@ -593,6 +600,7 @@ def admin_preview_field(pkg_id, field):
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>/sync/<field>", methods=["POST"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.manage")
 def admin_sync_field(pkg_id, field):
     if field not in _VALID_PREVIEW_FIELDS:
         return (
@@ -619,6 +627,7 @@ def admin_sync_field(pkg_id, field):
 @ghrm_bp.route("/api/v1/admin/ghrm/access-log", methods=["GET"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.view")
 def admin_access_log():
     page = int(request.args.get("page", 1))
     per_page = min(int(request.args.get("per_page", 20)), 100)
@@ -646,6 +655,7 @@ def admin_access_log():
 @ghrm_bp.route("/api/v1/admin/ghrm/access/sync/<user_id>", methods=["POST"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.manage")
 def admin_sync_user_access(user_id):
     _access_svc().on_subscription_activated(user_id, "")
     return jsonify({"ok": True})
@@ -763,6 +773,7 @@ def get_widgets():
 @ghrm_bp.route("/api/v1/admin/ghrm/widgets", methods=["GET"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.view")
 def admin_get_widgets():
     """Admin: return all GHRM widget configs."""
     widgets = _load_widgets()
@@ -772,6 +783,7 @@ def admin_get_widgets():
 @ghrm_bp.route("/api/v1/admin/ghrm/widgets/<widget_id>", methods=["PUT"])
 @require_auth
 @require_admin
+@require_permission("ghrm.repos.manage")
 def admin_update_widget(widget_id):
     """Admin: update a widget config (General fields + CSS)."""
     widgets = _load_widgets()
