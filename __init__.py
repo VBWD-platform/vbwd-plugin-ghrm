@@ -53,7 +53,11 @@ class GhrmPlugin(BasePlugin):
     def admin_permissions(self):
         return [
             {"key": "ghrm.packages.view", "label": "View packages", "group": "GHRM"},
-            {"key": "ghrm.packages.manage", "label": "Manage packages", "group": "GHRM"},
+            {
+                "key": "ghrm.packages.manage",
+                "label": "Manage packages",
+                "group": "GHRM",
+            },
             {"key": "ghrm.access.view", "label": "View access", "group": "GHRM"},
             {"key": "ghrm.access.manage", "label": "Manage access", "group": "GHRM"},
             {"key": "ghrm.configure", "label": "GHRM settings", "group": "GHRM"},
