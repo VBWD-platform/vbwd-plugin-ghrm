@@ -18,8 +18,12 @@ from typing import List, Optional, cast
 sys.path.insert(0, "/app")
 
 from vbwd.extensions import Session  # noqa: E402
-from vbwd.models.tarif_plan import TarifPlan  # noqa: E402
-from vbwd.models.tarif_plan_category import TarifPlanCategory  # noqa: E402
+from plugins.subscription.subscription.models.tarif_plan import (  # noqa: E402
+    TarifPlan,
+)
+from plugins.subscription.subscription.models.tarif_plan_category import (  # noqa: E402
+    TarifPlanCategory,
+)
 from vbwd.models.price import Price  # noqa: E402
 from vbwd.models.enums import BillingPeriod  # noqa: E402
 from vbwd.models.currency import Currency  # noqa: E402

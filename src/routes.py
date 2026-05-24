@@ -191,8 +191,7 @@ def list_categories():
     """Return the configured software category slugs and their DB names as labels."""
     import json as _json  # noqa: E401
     import os as _os
-    from vbwd.extensions import db
-    from vbwd.models.tarif_plan_category import TarifPlanCategory
+    from vbwd.services.catalog_read_model import resolve_catalog_read_model
 
     cfg = _cfg()
     slugs = cfg.get("software_category_slugs") or []
@@ -204,13 +203,8 @@ def list_categories():
                 slugs = _json.load(_f).get("software_category_slugs", [])
         except Exception:
             slugs = []
-    # Look up real names from DB; fall back to slug-derived title if not found
-    db_cats = {
-        c.slug: c.name
-        for c in db.session.query(TarifPlanCategory)
-        .filter(TarifPlanCategory.slug.in_(slugs))
-        .all()
-    }
+    # Look up real names via the catalog port; fall back to slug-derived title.
+    db_cats = resolve_catalog_read_model().category_labels_by_slugs(slugs)
     categories = [
         {"slug": s, "label": db_cats.get(s, s.replace("-", " ").title())} for s in slugs
     ]

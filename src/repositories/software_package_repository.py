@@ -1,8 +1,7 @@
 """GhrmSoftwarePackageRepository — data access for software packages."""
 from typing import Optional, List, Dict, Any
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
-from vbwd.models.tarif_plan import TarifPlan
-from vbwd.models.tarif_plan_category import TarifPlanCategory, tarif_plan_category_plans
+from vbwd.services.catalog_read_model import resolve_catalog_read_model
 from vbwd.extensions import db
 
 
@@ -60,18 +59,11 @@ class GhrmSoftwarePackageRepository:
             GhrmSoftwarePackage.is_active == True  # noqa: E712
         )
         if category_slug:
-            q = (
-                q.join(TarifPlan, GhrmSoftwarePackage.tariff_plan_id == TarifPlan.id)
-                .join(
-                    tarif_plan_category_plans,
-                    tarif_plan_category_plans.c.tarif_plan_id == TarifPlan.id,
-                )
-                .join(
-                    TarifPlanCategory,
-                    tarif_plan_category_plans.c.category_id == TarifPlanCategory.id,
-                )
-                .filter(TarifPlanCategory.slug == category_slug)
-            )
+            # Plans in the category come from the catalog port (no subscription
+            # model import). Empty list ⇒ no matching packages (in_([]) matches
+            # nothing), mirroring the prior JOIN against an empty category.
+            plan_ids = resolve_catalog_read_model().plan_ids_in_category(category_slug)
+            q = q.filter(GhrmSoftwarePackage.tariff_plan_id.in_(plan_ids))
         if query:
             term = f"%{query}%"
             q = q.filter(
