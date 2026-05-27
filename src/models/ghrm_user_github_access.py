@@ -1,6 +1,7 @@
 """GhrmUserGithubAccess — stores verified OAuth identity and deploy token per user."""
 from vbwd.extensions import db
 from vbwd.models.base import BaseModel
+from vbwd.utils.crypto import EncryptedString
 
 
 class AccessStatus:
@@ -21,9 +22,12 @@ class GhrmUserGithubAccess(BaseModel):
     )
     github_username = db.Column(db.String(128), nullable=False)
     github_user_id = db.Column(db.String(32), nullable=False)
-    oauth_token = db.Column(db.Text, nullable=True)  # encrypted
+    # S05 — tokens are encrypted at rest via the EncryptedString TypeDecorator.
+    # Stored column type stays Text (no schema migration needed); the cipher
+    # key resolves per-app from VBWD_TOKEN_ENCRYPTION_KEY (required in prod).
+    oauth_token = db.Column(EncryptedString(), nullable=True)
     oauth_scope = db.Column(db.String(256), nullable=True)
-    deploy_token = db.Column(db.Text, nullable=True)  # encrypted
+    deploy_token = db.Column(EncryptedString(), nullable=True)
     token_expires_at = db.Column(db.DateTime, nullable=True)
     access_status = db.Column(
         db.String(32), nullable=False, default=AccessStatus.ACTIVE

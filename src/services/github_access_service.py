@@ -95,7 +95,8 @@ class GithubAccessService:
             access = GhrmUserGithubAccess(user_id=user_id)
         access.github_username = github_username
         access.github_user_id = github_user_id
-        access.oauth_token = oauth_token  # TODO: encrypt in production
+        # Encrypted at rest by the EncryptedString TypeDecorator on the column (S05).
+        access.oauth_token = oauth_token
         access.oauth_scope = "read:user"
         access.access_status = AccessStatus.ACTIVE
         self._access_repo.save(access)
@@ -196,7 +197,8 @@ class GithubAccessService:
         new_token = self._github.create_deploy_token(
             pkg.github_owner, pkg.github_repo, access.github_username
         )
-        access.deploy_token = new_token  # TODO: encrypt
+        # Encrypted at rest by the EncryptedString TypeDecorator on the column (S05).
+        access.deploy_token = new_token
         access.access_status = AccessStatus.ACTIVE
         access.grace_expires_at = None
         self._access_repo.save(access)
