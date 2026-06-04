@@ -99,6 +99,95 @@ The OAuth App lets users connect their GitHub account to the platform (to receiv
 
 ---
 
+## Going live (mock vs. real GitHub client)
+
+By default the plugin uses a **mock GitHub client** so local dev and CI work
+without any GitHub credentials. The mock makes **no real API calls** — it
+fakes invitations/collaborators in memory. When the mock is active the backend
+logs a loud warning on every client build:
+
+```
+[GHRM] using MOCK GitHub client — no real API calls (GHRM_USE_MOCK_GITHUB=true).
+Set GHRM_USE_MOCK_GITHUB=false to talk to real GitHub.
+```
+
+To talk to **real GitHub**, set the environment variable on the backend
+container and fill in the config below:
+
+```
+GHRM_USE_MOCK_GITHUB=false
+```
+
+(The mock is selected only when `GHRM_USE_MOCK_GITHUB=true`; any other value —
+including unset — selects the real client.)
+
+### Required config for the real client
+
+| Key | Value |
+|-----|-------|
+| `github_app_id` | GitHub App numeric **App ID** |
+| `github_installation_id` | Installation ID of the App on the owner of your package repos |
+| `github_app_private_key_path` | Path to the App's PEM **inside the container**, e.g. `/app/plugins/ghrm/github-app.pem` |
+| `github_oauth_client_id` | OAuth App **Client ID** (user login) |
+| `github_oauth_client_secret` | OAuth App **Client Secret** |
+| `github_oauth_redirect_uri` | Full callback URL registered in the OAuth App |
+
+### Required GitHub permissions / scopes
+
+- **GitHub App → Repository permissions:**
+  - **Administration: Read & write** — required to add/remove collaborators.
+  - **Contents: Read-only** — required to read README/CHANGELOG/docs/releases.
+- **OAuth App scope:** `read:user` — to resolve the connecting user's GitHub login + id.
+- The **GitHub App must be installed** on the org/account that **owns the
+  package repos**. The installation only covers repos you grant it; the App can
+  only manage collaborators on repos under that installation.
+
+### Securing the private key (PEM) — never commit it
+
+The `.pem` private key is a credential and **must never be committed**. Provide
+it to the container as a **mounted secret / gitignored path**, for example a
+bind mount in your compose file:
+
+```yaml
+services:
+  api:
+    environment:
+      GHRM_USE_MOCK_GITHUB: "false"
+    volumes:
+      - ./secrets/github-app.pem:/app/plugins/ghrm/github-app.pem:ro
+```
+
+`*.pem` is in this plugin's `.gitignore`. Keep the file outside version control
+(a mounted secret, a CI secret store, or an ignored `secrets/` dir).
+
+### Verifying the real client end-to-end
+
+A gated live integration test
+(`tests/integration/test_github_live.py`) drives the real client against a
+**throwaway repo** to prove invite → list → remove works against real GitHub.
+It is **skipped in CI** and only runs when you opt in with real credentials:
+
+```bash
+export GHRM_LIVE_TEST=1
+export GHRM_LIVE_TEST_REPO="your-org/throwaway-repo"     # a repo you can break
+export GHRM_LIVE_TEST_GITHUB_USER="a-test-github-login"  # the account to invite
+export GHRM_GITHUB_APP_ID="123456"
+export GHRM_GITHUB_INSTALLATION_ID="789012"
+export GHRM_GITHUB_APP_PRIVATE_KEY_PATH="/app/plugins/ghrm/github-app.pem"
+
+python -m pytest plugins/ghrm/tests/integration/test_github_live.py -v
+```
+
+The test cleans up after itself (cancels the invitation and removes the
+collaborator), leaving the throwaway repo untouched. Turning an **invitation**
+into an **active** collaborator requires the invited user to **accept** it
+(in the GitHub UI, or via a PAT call as that user) — the automated test covers
+the invite/list/cancel/remove half that the platform controls; the manual
+accept + `git clone` step is the one-time human verification described in the
+sprint.
+
+---
+
 ## Populating CMS layouts, widgets and pages
 
 After configuring the plugin, run the population script to create the required CMS records:

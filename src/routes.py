@@ -56,7 +56,6 @@ from plugins.ghrm.src.services.software_package_service import (
     GhrmPackageNotFoundError,
     GhrmSyncAuthError,
     GhrmNotConfiguredError,
-    GhrmSubscriptionRequiredError,
 )
 from plugins.ghrm.src.services.github_access_service import (
     GithubAccessService,
@@ -89,6 +88,10 @@ def _make_github_client(cfg: dict) -> IGithubAppClient:
     if os.environ.get("GHRM_USE_MOCK_GITHUB", "").lower() == "true":
         from plugins.ghrm.src.services.github_app_client import MockGithubAppClient
 
+        logger.warning(
+            "[GHRM] using MOCK GitHub client — no real API calls "
+            "(GHRM_USE_MOCK_GITHUB=true). Set GHRM_USE_MOCK_GITHUB=false to talk to real GitHub."
+        )
         return MockGithubAppClient()
     app_id = cfg.get("github_app_id", "")
     installation_id = cfg.get("github_installation_id", "")
@@ -127,11 +130,18 @@ def _access_svc() -> GithubAccessService:
     cfg = _cfg()
     # Raises GithubNotConfiguredError if credentials absent — callers return 503
     github = _make_github_client(cfg)
+    from plugins.ghrm import _SubscriptionEntitlementsAdapter
+    from plugins.ghrm.src.repositories.repo_membership_repository import (
+        GhrmRepoMembershipRepository,
+    )
+
     return GithubAccessService(
         access_repo=GhrmUserGithubAccessRepository(db.session),
+        membership_repo=GhrmRepoMembershipRepository(db.session),
         log_repo=GhrmAccessLogRepository(db.session),
         package_repo=GhrmSoftwarePackageRepository(db.session),
         github=github,
+        entitlements=_SubscriptionEntitlementsAdapter(),
         oauth_client_id=cfg.get("github_oauth_client_id", ""),
         oauth_client_secret=cfg.get("github_oauth_client_secret", ""),
         oauth_redirect_uri=cfg.get("github_oauth_redirect_uri", ""),
@@ -258,22 +268,89 @@ def get_package_by_plan(plan_id: str):
     return jsonify(pkg.to_dict())
 
 
+# GitHub surfaces a user's pending invitations on their notifications page;
+# there is no per-repo public "my invitations" URL, so we point users there.
+_GITHUB_INVITATIONS_URL = "https://github.com/notifications"
+
+# Placeholder shown in the clone command — the user substitutes the
+# fine-grained PAT they create (we never mint or store a token, D3).
+_PAT_PLACEHOLDER = "<PAT>"
+
+
+def _fine_grained_pat_steps(github_owner: str, github_repo: str) -> list:
+    """Steps for the user to create a fine-grained PAT scoped to this repo."""
+    return [
+        "Open https://github.com/settings/personal-access-tokens/new",
+        "Choose 'Fine-grained tokens' and set an expiration",
+        f"Under 'Repository access' select only {github_owner}/{github_repo}",
+        "Under 'Permissions > Repository permissions' set 'Contents: Read'",
+        "Generate the token and copy it (you will not see it again)",
+    ]
+
+
+def _active_install_payload(access, package) -> dict:
+    """Fine-grained-PAT + clone guidance for an ACTIVE collaborator (D3)."""
+    github_owner = package.github_owner
+    github_repo = package.github_repo
+    username = access.github_username
+    repo_path = f"{github_owner}/{github_repo}"
+    return {
+        "state": "active",
+        "package_slug": package.slug,
+        "github_username": username,
+        "pat_steps": _fine_grained_pat_steps(github_owner, github_repo),
+        "clone_https": (
+            f"git clone https://{username}:{_PAT_PLACEHOLDER}"
+            f"@github.com/{repo_path}.git"
+        ),
+        "clone_ssh": f"git clone git@github.com:{repo_path}.git",
+    }
+
+
 @ghrm_bp.route("/api/v1/ghrm/packages/<slug>/install", methods=["GET"])
 @require_auth
 def get_install(slug):
-    """Return install instructions — requires active subscription + GitHub connection."""
+    """Return install guidance keyed on the user's membership state (D3).
+
+    Access is collaborator-based (deploy tokens removed in S49): the user clones
+    with their OWN credentials. For an ACTIVE membership we guide them to create
+    a fine-grained PAT (Contents: read on the repo) and show the clone commands;
+    an INVITED membership is told to accept the GitHub invitation first; no (or
+    a REVOKED) membership is a 403 — they need an active subscription.
+    """
+    from plugins.ghrm.src.repositories.repo_membership_repository import (
+        GhrmRepoMembershipRepository,
+    )
+    from plugins.ghrm.src.models.ghrm_repo_membership import MembershipStatus
+
     user_id = g.user_id
-    # Fetch deploy_token directly from repo (not exposed in to_dict())
-    raw = GhrmUserGithubAccessRepository(db.session).find_by_user_id(user_id)
-    token = raw.deploy_token if raw else None
-    try:
-        return jsonify(
-            _pkg_svc().get_install_instructions(slug, user_id, deploy_token=token)
+    package = GhrmSoftwarePackageRepository(db.session).find_by_slug(slug)
+    if not package:
+        return jsonify({"error": f"Package '{slug}' not found"}), 404
+
+    access = GhrmUserGithubAccessRepository(db.session).find_by_user_id(user_id)
+    membership = None
+    if access:
+        membership = GhrmRepoMembershipRepository(db.session).find_by_user_and_package(
+            user_id, package.id
         )
-    except GhrmPackageNotFoundError as e:
-        return jsonify({"error": str(e)}), 404
-    except GhrmSubscriptionRequiredError as e:
-        return jsonify({"error": str(e)}), 403
+
+    status = membership.status if membership else None
+    if status == MembershipStatus.ACTIVE.value:
+        return jsonify(_active_install_payload(access, package))
+    if status == MembershipStatus.INVITED.value:
+        return jsonify(
+            {
+                "state": "invited",
+                "package_slug": package.slug,
+                "message": "Accept your GitHub invitation first",
+                "invitations_url": _GITHUB_INVITATIONS_URL,
+            }
+        )
+    return (
+        jsonify({"error": "Active subscription and GitHub connection required"}),
+        403,
+    )
 
 
 # ─── Sync endpoint (GitHub Action) ──────────────────────────────────────────
@@ -389,7 +466,11 @@ def github_disconnect():
 @require_auth
 def get_access_status():
     try:
-        result = _access_svc().get_access_status(g.user_id)
+        access_service = _access_svc()
+        # Lazy promotion (D2): an INVITED membership the user has accepted on
+        # GitHub flips to ACTIVE before we read the status back.
+        access_service.verify_acceptance(g.user_id)
+        result = access_service.get_access_status(g.user_id)
     except GithubNotConfiguredError:
         return jsonify({"connected": False}), 200
     if not result:
@@ -403,7 +484,7 @@ def get_access_status():
 @ghrm_bp.route("/api/v1/admin/ghrm/packages", methods=["GET"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.view")
+@require_permission("ghrm.packages.view")
 def admin_list_packages():
     page = int(request.args.get("page", 1))
     per_page = min(int(request.args.get("per_page", 20)), 100)
@@ -430,7 +511,7 @@ def admin_list_packages():
 @ghrm_bp.route("/api/v1/admin/ghrm/packages", methods=["POST"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.manage")
+@require_permission("ghrm.packages.manage")
 def admin_create_package():
     body = request.json or {}
     required = ("name", "slug", "github_owner", "github_repo", "tariff_plan_id")
@@ -461,7 +542,7 @@ def admin_create_package():
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>", methods=["PUT"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.manage")
+@require_permission("ghrm.packages.manage")
 def admin_update_package(pkg_id):
     repo = GhrmSoftwarePackageRepository(db.session)
     pkg = repo.find_by_id(pkg_id)
@@ -513,7 +594,7 @@ def admin_update_package(pkg_id):
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>", methods=["DELETE"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.manage")
+@require_permission("ghrm.packages.manage")
 def admin_delete_package(pkg_id):
     repo = GhrmSoftwarePackageRepository(db.session)
     if not repo.delete(pkg_id):
@@ -524,7 +605,7 @@ def admin_delete_package(pkg_id):
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>/rotate-key", methods=["POST"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.manage")
+@require_permission("ghrm.packages.manage")
 def admin_rotate_key(pkg_id):
     try:
         new_key = _pkg_svc().rotate_api_key(pkg_id)
@@ -536,7 +617,7 @@ def admin_rotate_key(pkg_id):
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>/sync", methods=["POST"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.manage")
+@require_permission("ghrm.packages.manage")
 def admin_sync_package(pkg_id):
     repo = GhrmSoftwarePackageRepository(db.session)
     pkg = repo.find_by_id(pkg_id)
@@ -560,7 +641,7 @@ _VALID_PREVIEW_FIELDS = {"readme", "changelog", "screenshots"}
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>/preview/<field>", methods=["GET"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.view")
+@require_permission("ghrm.packages.view")
 def admin_preview_field(pkg_id, field):
     if field not in _VALID_PREVIEW_FIELDS:
         return (
@@ -594,7 +675,7 @@ def admin_preview_field(pkg_id, field):
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>/sync/<field>", methods=["POST"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.manage")
+@require_permission("ghrm.packages.manage")
 def admin_sync_field(pkg_id, field):
     if field not in _VALID_PREVIEW_FIELDS:
         return (
@@ -621,7 +702,7 @@ def admin_sync_field(pkg_id, field):
 @ghrm_bp.route("/api/v1/admin/ghrm/access-log", methods=["GET"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.view")
+@require_permission("ghrm.access.view")
 def admin_access_log():
     page = int(request.args.get("page", 1))
     per_page = min(int(request.args.get("per_page", 20)), 100)
@@ -649,7 +730,7 @@ def admin_access_log():
 @ghrm_bp.route("/api/v1/admin/ghrm/access/sync/<user_id>", methods=["POST"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.manage")
+@require_permission("ghrm.access.manage")
 def admin_sync_user_access(user_id):
     _access_svc().on_subscription_activated(user_id, "")
     return jsonify({"ok": True})
@@ -767,7 +848,7 @@ def get_widgets():
 @ghrm_bp.route("/api/v1/admin/ghrm/widgets", methods=["GET"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.view")
+@require_permission("ghrm.packages.view")
 def admin_get_widgets():
     """Admin: return all GHRM widget configs."""
     widgets = _load_widgets()
@@ -777,7 +858,7 @@ def admin_get_widgets():
 @ghrm_bp.route("/api/v1/admin/ghrm/widgets/<widget_id>", methods=["PUT"])
 @require_auth
 @require_admin
-@require_permission("ghrm.repos.manage")
+@require_permission("ghrm.packages.manage")
 def admin_update_widget(widget_id):
     """Admin: update a widget config (General fields + CSS)."""
     widgets = _load_widgets()

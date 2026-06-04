@@ -1,6 +1,13 @@
-"""Unit tests for GithubAccessService."""
+"""Unit tests for the rewritten GithubAccessService (S49.0 + S49.3).
+
+Entitlement-scoped, per-(user, package) collaborator lifecycle with the
+INVITED -> ACTIVE model and ERROR surfacing. Uses MagicMock repos, a
+MockGithubAppClient, and a STUBBED ISubscriptionEntitlements — the
+subscription plugin is never imported here (DIP via the ghrm-owned port).
+"""
+import logging
+
 import pytest
-from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 from plugins.ghrm.src.services.github_access_service import (
@@ -8,22 +15,36 @@ from plugins.ghrm.src.services.github_access_service import (
     GhrmOAuthError,
 )
 from plugins.ghrm.src.services.github_app_client import MockGithubAppClient
-from plugins.ghrm.src.models.ghrm_user_github_access import AccessStatus
+from plugins.ghrm.src.services.github_app_client_real import GithubAppClientError
+from plugins.ghrm.src.models.ghrm_repo_membership import MembershipStatus
+
+
+class _StubEntitlements:
+    """In-test ISubscriptionEntitlements — no subscription import."""
+
+    def __init__(self, plan_ids=None):
+        self._plan_ids = list(plan_ids or [])
+
+    def active_plan_ids(self, user_id):
+        return list(self._plan_ids)
 
 
 def _make_service(
     access_repo=None,
+    membership_repo=None,
     log_repo=None,
     package_repo=None,
     github=None,
+    entitlements=None,
     grace_period_fallback_days=7,
 ):
-    """Build GithubAccessService with mock dependencies."""
     return GithubAccessService(
         access_repo=access_repo or MagicMock(),
+        membership_repo=membership_repo or MagicMock(),
         log_repo=log_repo or MagicMock(),
         package_repo=package_repo or MagicMock(),
         github=github or MockGithubAppClient(),
+        entitlements=entitlements or _StubEntitlements(),
         oauth_client_id="test-client-id",
         oauth_client_secret="test-client-secret",
         oauth_redirect_uri="http://localhost/callback",
@@ -31,321 +52,602 @@ def _make_service(
     )
 
 
-def _make_access(
-    user_id="user-1",
-    username="octocat",
-    github_user_id="99",
-    status=AccessStatus.ACTIVE,
-    deploy_token=None,
-    grace_expires_at=None,
-):
-    """Build a mock GhrmUserGithubAccess-like object."""
+def _make_access(user_id="user-1", username="octocat", github_user_id="99"):
     access = MagicMock()
     access.id = "access-id-1"
     access.user_id = user_id
     access.github_username = username
     access.github_user_id = github_user_id
-    access.access_status = status
-    access.deploy_token = deploy_token
-    access.grace_expires_at = grace_expires_at
     access.oauth_token = "existing-token"
     access.to_dict.return_value = {
         "id": "access-id-1",
         "user_id": user_id,
         "github_username": username,
         "github_user_id": github_user_id,
-        "access_status": status,
     }
     return access
 
 
-def _make_package(
-    pkg_id="pkg-1",
-    slug="my-pkg",
-    owner="acme",
-    repo="my-repo",
-    branch="release",
-    is_active=True,
-):
-    """Build a mock GhrmSoftwarePackage-like object."""
+def _make_package(pkg_id="pkg-1", slug="my-pkg", owner="acme", repo="my-repo"):
     pkg = MagicMock()
     pkg.id = pkg_id
     pkg.slug = slug
     pkg.github_owner = owner
     pkg.github_repo = repo
-    pkg.github_protected_branch = branch
-    pkg.is_active = is_active
     return pkg
 
 
-class TestHandleOAuthCallback:
-    def test_stores_verified_username_and_user_id(self):
-        """OAuth callback stores github_username and github_user_id from API response."""
+def _configure_oauth(github, code, login="octocat", user_id="99"):
+    github.oauth_token_map[code] = f"tok-{code}"
+    github.oauth_user_map[f"tok-{code}"] = {"login": login, "id": user_id}
+
+
+class TestConnectEntitlementResolution:
+    def test_one_entitlement_invited_creates_invited_membership(self):
         github = MockGithubAppClient()
-        github.oauth_token_map["code-abc"] = "oauth-tok-xyz"
-        github.oauth_user_map["oauth-tok-xyz"] = {"login": "octocat", "id": "99"}
-
-        access_repo = MagicMock()
-        access_repo.find_by_user_id.return_value = None  # new user
-
-        package_repo = MagicMock()
-        package_repo.find_all.return_value = {"items": []}
-
-        saved_access = None
-
-        def capture_save(a):
-            nonlocal saved_access
-            saved_access = a
-            return a
-
-        access_repo.save.side_effect = capture_save
-
-        svc = _make_service(
-            access_repo=access_repo, package_repo=package_repo, github=github
-        )
-        svc.handle_oauth_callback("user-1", "code-abc")
-
-        assert saved_access is not None
-        assert saved_access.github_username == "octocat"
-        assert saved_access.github_user_id == "99"
-
-    def test_adds_collaborator_if_packages_exist(self):
-        """When packages exist, add_collaborator is called for each."""
-        github = MockGithubAppClient()
-        github.oauth_user_map["mock-oauth-token-code-123"] = {
-            "login": "octocat",
-            "id": "42",
-        }
-
+        _configure_oauth(github, "code-a")
         access_repo = MagicMock()
         access_repo.find_by_user_id.return_value = None
-
-        pkg = _make_package()
-        package_repo = MagicMock()
-        package_repo.find_all.return_value = {"items": [pkg]}
-
-        saved_accesses = []
-        access_repo.save.side_effect = lambda a: saved_accesses.append(a) or a
-
-        svc = _make_service(
-            access_repo=access_repo, package_repo=package_repo, github=github
-        )
-        svc.handle_oauth_callback("user-1", "code-123")
-
-        key = (pkg.github_owner, pkg.github_repo)
-        assert "octocat" in github.collaborators.get(key, set())
-
-    def test_raises_on_github_api_error(self):
-        """If exchange_oauth_code raises, GhrmOAuthError is raised."""
-        github = MockGithubAppClient()
-        github.raise_on_exchange = Exception("network timeout")
-
-        svc = _make_service(github=github)
-
-        with pytest.raises(GhrmOAuthError, match="OAuth exchange failed"):
-            svc.handle_oauth_callback("user-1", "bad-code")
-
-
-class TestDisconnectGithub:
-    def test_revokes_token_and_removes_collaborator(self):
-        """disconnect_github removes collaborator and deletes access record."""
-        github = MockGithubAppClient()
-        access = _make_access()
-        access.oauth_token = "old-token"
-
-        access_repo = MagicMock()
-        access_repo.find_by_user_id.return_value = access
-
-        pkg = _make_package()
-        package_repo = MagicMock()
-        package_repo.find_all.return_value = {"items": [pkg]}
-
-        log_repo = MagicMock()
-
-        svc = _make_service(
-            access_repo=access_repo,
-            log_repo=log_repo,
-            package_repo=package_repo,
-            github=github,
-        )
-        svc.disconnect_github("user-1")
-
-        # Collaborator removed
-        # remove_collaborator was called (MockGithubAppClient records nothing for discard on empty)
-        # We verify log was called
-        log_repo.log.assert_called()
-
-        # delete was called with access id
-        access_repo.delete.assert_called_once_with("access-id-1")
-
-    def test_disconnect_noop_when_no_access(self):
-        """disconnect_github does nothing if no access record exists."""
-        access_repo = MagicMock()
-        access_repo.find_by_user_id.return_value = None
-
-        svc = _make_service(access_repo=access_repo)
-        svc.disconnect_github("user-1")
-
-        access_repo.delete.assert_not_called()
-
-
-class TestOnSubscriptionActivated:
-    def test_adds_collaborator_when_github_connected(self):
-        """on_subscription_activated adds collaborator when access record exists."""
-        github = MockGithubAppClient()
-
-        access = _make_access(status=AccessStatus.ACTIVE)
-        access_repo = MagicMock()
-        access_repo.find_by_user_id.return_value = access
+        access_repo.save.side_effect = lambda a: a
 
         pkg = _make_package()
         package_repo = MagicMock()
         package_repo.find_by_tariff_plan_id.return_value = pkg
 
-        log_repo = MagicMock()
+        membership_repo = MagicMock()
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+            entitlements=_StubEntitlements(plan_ids=["plan-A"]),
+        )
+        svc.handle_oauth_callback("user-1", "code-a")
+
+        package_repo.find_by_tariff_plan_id.assert_called_once_with("plan-A")
+        membership_repo.upsert.assert_called_once()
+        call = membership_repo.upsert.call_args
+        assert call.args[0] == "user-1"
+        assert call.args[1] == pkg.id
+        assert call.kwargs["status"] == MembershipStatus.INVITED.value
+        assert call.kwargs["invitation_id"] is not None
+        key = (pkg.github_owner, pkg.github_repo)
+        assert "octocat" in github.collaborators.get(key, set())
+
+    def test_one_entitlement_already_member_creates_active_membership(self):
+        github = MockGithubAppClient()
+        _configure_oauth(github, "code-a")
+        pkg = _make_package()
+        github.members_already.add((pkg.github_owner, pkg.github_repo, "octocat"))
+
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        access_repo.save.side_effect = lambda a: a
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.return_value = pkg
+        membership_repo = MagicMock()
 
         svc = _make_service(
             access_repo=access_repo,
-            log_repo=log_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+            entitlements=_StubEntitlements(plan_ids=["plan-A"]),
+        )
+        svc.handle_oauth_callback("user-1", "code-a")
+
+        assert (
+            membership_repo.upsert.call_args.kwargs["status"]
+            == MembershipStatus.ACTIVE.value
+        )
+
+    def test_no_entitlement_creates_no_membership_and_does_not_call_add(self):
+        github = MockGithubAppClient()
+        _configure_oauth(github, "code-a")
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        access_repo.save.side_effect = lambda a: a
+        package_repo = MagicMock()
+        membership_repo = MagicMock()
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+            entitlements=_StubEntitlements(plan_ids=[]),
+        )
+        svc.handle_oauth_callback("user-1", "code-a")
+
+        membership_repo.upsert.assert_not_called()
+        package_repo.find_by_tariff_plan_id.assert_not_called()
+        assert github.collaborators == {}
+
+    def test_two_entitlements_two_memberships_unrelated_package_not_added(self):
+        github = MockGithubAppClient()
+        _configure_oauth(github, "code-a")
+        pkg_a = _make_package(pkg_id="pkg-a", owner="acme", repo="repo-a")
+        pkg_b = _make_package(pkg_id="pkg-b", owner="acme", repo="repo-b")
+
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.side_effect = lambda plan: {
+            "plan-A": pkg_a,
+            "plan-B": pkg_b,
+        }.get(plan)
+
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        access_repo.save.side_effect = lambda a: a
+        membership_repo = MagicMock()
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+            entitlements=_StubEntitlements(plan_ids=["plan-A", "plan-B"]),
+        )
+        svc.handle_oauth_callback("user-1", "code-a")
+
+        assert membership_repo.upsert.call_count == 2
+        assert "octocat" in github.collaborators.get(("acme", "repo-a"), set())
+        assert "octocat" in github.collaborators.get(("acme", "repo-b"), set())
+        assert ("acme", "repo-unrelated") not in github.collaborators
+
+    def test_skips_plan_with_no_package(self):
+        github = MockGithubAppClient()
+        _configure_oauth(github, "code-a")
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.return_value = None
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        access_repo.save.side_effect = lambda a: a
+        membership_repo = MagicMock()
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+            entitlements=_StubEntitlements(plan_ids=["plan-no-pkg"]),
+        )
+        svc.handle_oauth_callback("user-1", "code-a")
+        membership_repo.upsert.assert_not_called()
+
+    def test_stores_verified_identity(self):
+        github = MockGithubAppClient()
+        _configure_oauth(github, "code-a", login="octocat", user_id="99")
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        saved = {}
+        access_repo.save.side_effect = (
+            lambda a: saved.update(
+                {"username": a.github_username, "user_id": a.github_user_id}
+            )
+            or a
+        )
+
+        svc = _make_service(
+            access_repo=access_repo,
+            entitlements=_StubEntitlements(plan_ids=[]),
+            github=github,
+        )
+        svc.handle_oauth_callback("user-1", "code-a")
+        assert saved["username"] == "octocat"
+        assert saved["user_id"] == "99"
+
+    def test_raises_oauth_error_on_exchange_failure(self):
+        github = MockGithubAppClient()
+        github.raise_on_exchange = Exception("network timeout")
+        svc = _make_service(github=github)
+        with pytest.raises(GhrmOAuthError, match="OAuth exchange failed"):
+            svc.handle_oauth_callback("user-1", "bad-code")
+
+
+class TestEnsureCollaboratorErrorSurfacing:
+    def test_add_collaborator_error_records_error_and_logs_warning(self, caplog):
+        github = MockGithubAppClient()
+        _configure_oauth(github, "code-a")
+        github.raise_on_add_collaborator = GithubAppClientError("403 forbidden")
+
+        pkg = _make_package()
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.return_value = pkg
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        access_repo.save.side_effect = lambda a: a
+        membership_repo = MagicMock()
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+            entitlements=_StubEntitlements(plan_ids=["plan-A"]),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            svc.handle_oauth_callback("user-1", "code-a")  # must NOT raise
+
+        call = membership_repo.upsert.call_args
+        assert call.kwargs["status"] == MembershipStatus.ERROR.value
+        assert "403 forbidden" in call.kwargs["last_error"]
+        assert any("add_collaborator failed" in rec.message for rec in caplog.records)
+
+    def test_non_client_errors_propagate(self):
+        github = MockGithubAppClient()
+        _configure_oauth(github, "code-a")
+        github.raise_on_add_collaborator = ValueError("unexpected boom")
+        pkg = _make_package()
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.return_value = pkg
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        access_repo.save.side_effect = lambda a: a
+
+        svc = _make_service(
+            access_repo=access_repo,
+            package_repo=package_repo,
+            github=github,
+            entitlements=_StubEntitlements(plan_ids=["plan-A"]),
+        )
+        with pytest.raises(ValueError, match="unexpected boom"):
+            svc.handle_oauth_callback("user-1", "code-a")
+
+
+class TestOnSubscriptionActivated:
+    def test_connected_ensures_that_one_package(self):
+        github = MockGithubAppClient()
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+        pkg = _make_package()
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.return_value = pkg
+        membership_repo = MagicMock()
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
             package_repo=package_repo,
             github=github,
         )
         svc.on_subscription_activated("user-1", "plan-1")
 
-        key = (pkg.github_owner, pkg.github_repo)
-        assert access.github_username in github.collaborators.get(key, set())
-        log_repo.log.assert_called_once()
+        package_repo.find_by_tariff_plan_id.assert_called_once_with("plan-1")
+        membership_repo.upsert.assert_called_once()
+        assert access.github_username in github.collaborators.get(
+            (pkg.github_owner, pkg.github_repo), set()
+        )
 
-    def test_skips_when_github_not_connected(self):
-        """on_subscription_activated does nothing when no access record exists."""
+    def test_disconnected_is_noop(self):
         github = MockGithubAppClient()
-
         access_repo = MagicMock()
         access_repo.find_by_user_id.return_value = None
+        package_repo = MagicMock()
+        membership_repo = MagicMock()
 
-        svc = _make_service(access_repo=access_repo, github=github)
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+        )
         svc.on_subscription_activated("user-1", "plan-1")
 
-        # No collaborators were added
+        package_repo.find_by_tariff_plan_id.assert_not_called()
+        membership_repo.upsert.assert_not_called()
         assert github.collaborators == {}
 
 
 class TestOnSubscriptionCancelled:
-    def test_sets_grace_status(self):
-        """on_subscription_cancelled sets access_status to GRACE."""
-        access = _make_access(status=AccessStatus.ACTIVE)
+    def test_sets_membership_grace_with_expiry(self):
+        access = _make_access()
         access_repo = MagicMock()
         access_repo.find_by_user_id.return_value = access
-
+        pkg = _make_package()
         package_repo = MagicMock()
-        package_repo.find_by_tariff_plan_id.return_value = None
-
-        svc = _make_service(access_repo=access_repo, package_repo=package_repo)
-        svc.on_subscription_cancelled("user-1", "plan-1")
-
-        assert access.access_status == AccessStatus.GRACE
-        access_repo.save.assert_called_once_with(access)
-
-    def test_uses_plan_trailing_days(self):
-        """trailing_days=14 results in grace_expires_at approx now + 14 days."""
-        access = _make_access(status=AccessStatus.ACTIVE)
-        access_repo = MagicMock()
-        access_repo.find_by_user_id.return_value = access
-
-        package_repo = MagicMock()
-        package_repo.find_by_tariff_plan_id.return_value = None
+        package_repo.find_by_tariff_plan_id.return_value = pkg
+        membership = MagicMock()
+        membership_repo = MagicMock()
+        membership_repo.find_by_user_and_package.return_value = membership
 
         svc = _make_service(
             access_repo=access_repo,
+            membership_repo=membership_repo,
             package_repo=package_repo,
-            grace_period_fallback_days=7,
+        )
+        svc.on_subscription_cancelled("user-1", "plan-1", trailing_days=14)
+
+        call = membership_repo.upsert.call_args
+        assert call.args[0] == "user-1"
+        assert call.args[1] == pkg.id
+        assert call.kwargs["status"] == MembershipStatus.GRACE.value
+        assert call.kwargs["grace_expires_at"] is not None
+
+    def test_noop_when_no_package(self):
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.return_value = None
+        membership_repo = MagicMock()
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+        )
+        svc.on_subscription_cancelled("user-1", "plan-1", trailing_days=14)
+        membership_repo.upsert.assert_not_called()
+
+
+class TestOnSubscriptionPaymentFailed:
+    def test_delegates_to_grace(self):
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+        pkg = _make_package()
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.return_value = pkg
+        membership_repo = MagicMock()
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+        )
+        svc.on_subscription_payment_failed("user-1", "plan-1", trailing_days=3)
+        assert (
+            membership_repo.upsert.call_args.kwargs["status"]
+            == MembershipStatus.GRACE.value
         )
 
-        before = datetime.utcnow()
-        svc.on_subscription_cancelled("user-1", "plan-1", trailing_days=14)
-        after = datetime.utcnow()
 
-        expected_min = before + timedelta(days=13, hours=23)
-        expected_max = after + timedelta(days=14, seconds=1)
+class TestOnSubscriptionRenewed:
+    def test_reensures_collaborator_no_token_rotation(self):
+        github = MockGithubAppClient()
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+        pkg = _make_package()
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.return_value = pkg
+        membership_repo = MagicMock()
 
-        assert access.grace_expires_at >= expected_min
-        assert access.grace_expires_at <= expected_max
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+        )
+        svc.on_subscription_renewed("user-1", "plan-1")
+
+        membership_repo.upsert.assert_called_once()
+        assert access.github_username in github.collaborators.get(
+            (pkg.github_owner, pkg.github_repo), set()
+        )
+        # No deploy-token rotation occurs (deploy tokens removed in S49.2/S49.3).
+        assert github.revoked_tokens == []
 
 
 class TestRevokeExpiredGraceAccess:
-    def test_removes_collaborator_and_token_returns_count(self):
-        """revoke_expired_grace_access removes collaborator, revokes token, returns count=1."""
+    def test_active_membership_removes_collaborator_and_revokes(self):
         github = MockGithubAppClient()
-
-        access = _make_access(
-            status=AccessStatus.GRACE, deploy_token="old-deploy-token"
-        )
-        access_repo = MagicMock()
-        access_repo.find_grace_expired.return_value = [access]
-
         pkg = _make_package()
-        package_repo = MagicMock()
-        package_repo.find_all.return_value = {"items": [pkg]}
+        github.collaborators[(pkg.github_owner, pkg.github_repo)] = {"octocat"}
 
-        log_repo = MagicMock()
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+
+        membership = MagicMock()
+        membership.user_id = "user-1"
+        membership.package_id = pkg.id
+        membership.status = MembershipStatus.ACTIVE.value
+        membership.invitation_id = None
+        membership.package = pkg
+        membership_repo = MagicMock()
+        membership_repo.find_grace_expired.return_value = [membership]
+
+        package_repo = MagicMock()
+        package_repo.find_by_id.return_value = pkg
 
         svc = _make_service(
             access_repo=access_repo,
-            log_repo=log_repo,
+            membership_repo=membership_repo,
             package_repo=package_repo,
             github=github,
         )
         count = svc.revoke_expired_grace_access()
 
         assert count == 1
-        assert access.access_status == AccessStatus.REVOKED
-        assert access.deploy_token is None
-        assert "old-deploy-token" in github.revoked_tokens
-        log_repo.log.assert_called()
+        assert "octocat" not in github.collaborators.get(
+            (pkg.github_owner, pkg.github_repo), set()
+        )
+        assert (
+            membership_repo.upsert.call_args.kwargs["status"]
+            == MembershipStatus.REVOKED.value
+        )
 
-
-class TestOnSubscriptionRenewed:
-    def test_extends_access_and_rotates_token(self):
-        """on_subscription_renewed creates new deploy token and revokes old one."""
+    def test_invited_membership_cancels_invitation(self):
         github = MockGithubAppClient()
+        pkg = _make_package()
 
-        access = _make_access(status=AccessStatus.GRACE, deploy_token="old-token")
+        access = _make_access()
         access_repo = MagicMock()
         access_repo.find_by_user_id.return_value = access
 
-        pkg = _make_package()
-        package_repo = MagicMock()
-        package_repo.find_by_tariff_plan_id.return_value = pkg
+        membership = MagicMock()
+        membership.user_id = "user-1"
+        membership.package_id = pkg.id
+        membership.status = MembershipStatus.INVITED.value
+        membership.invitation_id = "inv-9"
+        membership.package = pkg
+        membership_repo = MagicMock()
+        membership_repo.find_grace_expired.return_value = [membership]
 
+        package_repo = MagicMock()
+        package_repo.find_by_id.return_value = pkg
+
+        cancelled = {}
+        original_cancel = github.cancel_invitation
+
+        def spy_cancel(owner, repo, invitation_id):
+            cancelled["args"] = (owner, repo, invitation_id)
+            return original_cancel(owner, repo, invitation_id)
+
+        github.cancel_invitation = spy_cancel
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+        )
+        count = svc.revoke_expired_grace_access()
+
+        assert count == 1
+        assert cancelled["args"] == (pkg.github_owner, pkg.github_repo, "inv-9")
+        assert (
+            membership_repo.upsert.call_args.kwargs["status"]
+            == MembershipStatus.REVOKED.value
+        )
+
+
+class TestVerifyAcceptance:
+    def test_invited_and_accepted_becomes_active(self):
+        github = MockGithubAppClient()
+        pkg = _make_package()
+        github.accepted.add((pkg.github_owner, pkg.github_repo, "octocat"))
+
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+
+        membership = MagicMock()
+        membership.user_id = "user-1"
+        membership.package_id = pkg.id
+        membership.status = MembershipStatus.INVITED.value
+        membership.invitation_id = "inv-1"
+        membership.package = pkg
+        membership_repo = MagicMock()
+        membership_repo.find_by_user.return_value = [membership]
+
+        package_repo = MagicMock()
+        package_repo.find_by_id.return_value = pkg
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+        )
+        svc.verify_acceptance("user-1")
+
+        call = membership_repo.upsert.call_args
+        assert call.kwargs["status"] == MembershipStatus.ACTIVE.value
+        assert call.kwargs["invitation_id"] is None
+
+    def test_invited_not_yet_accepted_stays_invited(self):
+        github = MockGithubAppClient()
+        pkg = _make_package()
+
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+
+        membership = MagicMock()
+        membership.user_id = "user-1"
+        membership.package_id = pkg.id
+        membership.status = MembershipStatus.INVITED.value
+        membership.invitation_id = "inv-1"
+        membership.package = pkg
+        membership_repo = MagicMock()
+        membership_repo.find_by_user.return_value = [membership]
+
+        package_repo = MagicMock()
+        package_repo.find_by_id.return_value = pkg
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+        )
+        svc.verify_acceptance("user-1")
+        membership_repo.upsert.assert_not_called()
+
+
+class TestDisconnectGithub:
+    def test_removes_all_memberships_and_deletes_identity(self):
+        github = MockGithubAppClient()
+        pkg = _make_package()
+        github.collaborators[(pkg.github_owner, pkg.github_repo)] = {"octocat"}
+
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+
+        membership = MagicMock()
+        membership.user_id = "user-1"
+        membership.package_id = pkg.id
+        membership.status = MembershipStatus.ACTIVE.value
+        membership.invitation_id = None
+        membership.package = pkg
+        membership_repo = MagicMock()
+        membership_repo.find_by_user.return_value = [membership]
+
+        package_repo = MagicMock()
+        package_repo.find_by_id.return_value = pkg
         log_repo = MagicMock()
 
         svc = _make_service(
             access_repo=access_repo,
+            membership_repo=membership_repo,
             log_repo=log_repo,
             package_repo=package_repo,
             github=github,
         )
-        svc.on_subscription_renewed("user-1", "plan-1")
+        svc.disconnect_github("user-1")
 
-        assert "old-token" in github.revoked_tokens
-        # New token was set on access
-        assert access.deploy_token == f"mock-token-{access.github_username}"
-        assert access.access_status == AccessStatus.ACTIVE
-        assert access.grace_expires_at is None
+        assert "octocat" not in github.collaborators.get(
+            (pkg.github_owner, pkg.github_repo), set()
+        )
+        membership_repo.delete_for_user.assert_called_once_with("user-1")
+        access_repo.delete.assert_called_once_with("access-id-1")
+
+    def test_noop_when_no_access(self):
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        membership_repo = MagicMock()
+
+        svc = _make_service(access_repo=access_repo, membership_repo=membership_repo)
+        svc.disconnect_github("user-1")
+
+        access_repo.delete.assert_not_called()
+        membership_repo.delete_for_user.assert_not_called()
 
 
-class TestOnSubscriptionPaymentFailed:
-    def test_starts_grace_period(self):
-        """on_subscription_payment_failed delegates to on_subscription_cancelled."""
-        access = _make_access(status=AccessStatus.ACTIVE)
+class TestGetAccessStatus:
+    def test_connected_returns_memberships(self):
+        access = _make_access()
         access_repo = MagicMock()
         access_repo.find_by_user_id.return_value = access
 
-        package_repo = MagicMock()
-        package_repo.find_by_tariff_plan_id.return_value = None
+        membership = MagicMock()
+        membership.to_dict.return_value = {"package_slug": "my-pkg", "status": "active"}
+        membership_repo = MagicMock()
+        membership_repo.find_by_user.return_value = [membership]
 
-        svc = _make_service(access_repo=access_repo, package_repo=package_repo)
-        svc.on_subscription_payment_failed("user-1", "plan-1", trailing_days=3)
+        svc = _make_service(access_repo=access_repo, membership_repo=membership_repo)
+        result = svc.get_access_status("user-1")
 
-        assert access.access_status == AccessStatus.GRACE
-        assert access.grace_expires_at is not None
+        assert result["connected"] is True
+        assert result["memberships"] == [{"package_slug": "my-pkg", "status": "active"}]
+
+    def test_not_connected_returns_none(self):
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        svc = _make_service(access_repo=access_repo)
+        assert svc.get_access_status("user-1") is None

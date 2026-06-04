@@ -10,3 +10,6 @@ build/
 .coverage
 htmlcov/
 
+# GitHub App private key — never commit secrets
+*.pem
+

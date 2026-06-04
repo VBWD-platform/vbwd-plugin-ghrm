@@ -1,6 +1,5 @@
 """GhrmUserGithubAccessRepository — data access for user GitHub OAuth records."""
-from typing import Optional, List
-from datetime import datetime
+from typing import Optional
 from plugins.ghrm.src.models.ghrm_user_github_access import GhrmUserGithubAccess
 
 
@@ -13,18 +12,6 @@ class GhrmUserGithubAccessRepository:
             self.session.query(GhrmUserGithubAccess)
             .filter(GhrmUserGithubAccess.user_id == user_id)
             .first()
-        )
-
-    def find_grace_expired(self, now: datetime) -> List[GhrmUserGithubAccess]:
-        from plugins.ghrm.src.models.ghrm_user_github_access import AccessStatus
-
-        return (
-            self.session.query(GhrmUserGithubAccess)
-            .filter(
-                GhrmUserGithubAccess.access_status == AccessStatus.GRACE,
-                GhrmUserGithubAccess.grace_expires_at <= now,
-            )
-            .all()
         )
 
     def save(self, access: GhrmUserGithubAccess) -> GhrmUserGithubAccess:

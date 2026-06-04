@@ -1,20 +1,38 @@
-"""GithubAccessService — manages GitHub OAuth identity and repo collaborator lifecycle."""
+"""GithubAccessService — entitlement-scoped, per-(user, package) collaborator lifecycle.
+
+Grant/revoke is scoped to the user's *actual* entitlements (resolved through the
+ghrm-owned ``ISubscriptionEntitlements`` port — S49.0), tracked per
+(user, package) in ``GhrmRepoMembership`` with the GitHub invitation model
+(INVITED -> ACTIVE), and failures are surfaced as ERROR (no silent swallow).
+"""
+import logging
 from datetime import timedelta
+from typing import Any, Dict, Optional, cast
+from uuid import UUID
+
 from vbwd.utils.datetime_utils import utcnow
-from typing import Optional, Dict, Any
-from plugins.ghrm.src.models.ghrm_user_github_access import (
-    GhrmUserGithubAccess,
-    AccessStatus,
-)
+
+from plugins.ghrm.src.models.ghrm_user_github_access import GhrmUserGithubAccess
+from plugins.ghrm.src.models.ghrm_repo_membership import MembershipStatus
 from plugins.ghrm.src.models.ghrm_access_log import SyncAction
 from plugins.ghrm.src.repositories.user_github_access_repository import (
     GhrmUserGithubAccessRepository,
+)
+from plugins.ghrm.src.repositories.repo_membership_repository import (
+    GhrmRepoMembershipRepository,
 )
 from plugins.ghrm.src.repositories.access_log_repository import GhrmAccessLogRepository
 from plugins.ghrm.src.repositories.software_package_repository import (
     GhrmSoftwarePackageRepository,
 )
 from plugins.ghrm.src.services.github_app_client import IGithubAppClient
+from plugins.ghrm.src.services.github_app_client_real import GithubAppClientError
+from plugins.ghrm.src.services.ports import ISubscriptionEntitlements
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_COLLABORATOR_PERMISSION = "push"
+OAUTH_SCOPE = "read:user"
 
 
 class GhrmGithubNotConnectedError(Exception):
@@ -26,23 +44,27 @@ class GhrmOAuthError(Exception):
 
 
 class GithubAccessService:
-    """Manages GitHub OAuth identity, deploy tokens, and collaborator lifecycle."""
+    """OAuth identity + per-(user, package) collaborator lifecycle."""
 
     def __init__(
         self,
         access_repo: GhrmUserGithubAccessRepository,
+        membership_repo: GhrmRepoMembershipRepository,
         log_repo: GhrmAccessLogRepository,
         package_repo: GhrmSoftwarePackageRepository,
         github: IGithubAppClient,
+        entitlements: ISubscriptionEntitlements,
         oauth_client_id: str = "",
         oauth_client_secret: str = "",
         oauth_redirect_uri: str = "",
         grace_period_fallback_days: int = 7,
     ) -> None:
         self._access_repo = access_repo
+        self._membership_repo = membership_repo
         self._log_repo = log_repo
         self._package_repo = package_repo
         self._github = github
+        self._entitlements = entitlements
         self._oauth_client_id = oauth_client_id
         self._oauth_client_secret = oauth_client_secret
         self._oauth_redirect_uri = oauth_redirect_uri
@@ -60,18 +82,14 @@ class GithubAccessService:
             {
                 "client_id": self._oauth_client_id,
                 "redirect_uri": self._oauth_redirect_uri,
-                "scope": "read:user",
+                "scope": OAUTH_SCOPE,
                 "state": state,
             }
         )
         return f"https://github.com/login/oauth/authorize?{params}"
 
     def handle_oauth_callback(self, user_id: str, code: str) -> Dict[str, Any]:
-        """
-        Exchange OAuth code for token, fetch GitHub identity, upsert access record.
-        If user has active subscription, adds collaborator for all their packages.
-        Returns access dict.
-        """
+        """Exchange the OAuth code, store identity, then grant entitled repos."""
         try:
             oauth_token = self._github.exchange_oauth_code(
                 code=code,
@@ -83,52 +101,33 @@ class GithubAccessService:
             raise GhrmOAuthError(f"OAuth exchange failed: {exc}") from exc
 
         try:
-            gh_user = self._github.get_oauth_user(oauth_token)
+            github_user = self._github.get_oauth_user(oauth_token)
         except Exception as exc:
             raise GhrmOAuthError(f"Failed to fetch GitHub user: {exc}") from exc
-
-        github_username = gh_user["login"]
-        github_user_id = str(gh_user["id"])
 
         access = self._access_repo.find_by_user_id(user_id)
         if not access:
             access = GhrmUserGithubAccess(user_id=user_id)
-        access.github_username = github_username
-        access.github_user_id = github_user_id
+        access.github_username = github_user["login"]
+        access.github_user_id = str(github_user["id"])
         # Encrypted at rest by the EncryptedString TypeDecorator on the column (S05).
         access.oauth_token = oauth_token
-        access.oauth_scope = "read:user"
-        access.access_status = AccessStatus.ACTIVE
+        access.oauth_scope = OAUTH_SCOPE
         self._access_repo.save(access)
 
-        # Add collaborator for any packages the user is subscribed to
-        self._sync_collaborators_for_user(
-            user_id, access, triggered_by="oauth_callback"
-        )
-
+        self._grant_entitled(user_id, access, triggered_by="oauth_callback")
         return access.to_dict()
 
     def disconnect_github(self, user_id: str) -> None:
-        """Revoke token, remove collaborator from all repos, delete access record."""
+        """Remove every membership's collaborator/invite, then delete identity."""
         access = self._access_repo.find_by_user_id(user_id)
         if not access:
             return
 
-        packages = self._get_packages_for_user(user_id)
-        for pkg in packages:
-            self._github.remove_collaborator(
-                pkg.github_owner, pkg.github_repo, access.github_username
-            )
-            self._log_repo.log(
-                user_id, str(pkg.id), SyncAction.REMOVE_COLLABORATOR, "manual"
-            )
+        for membership in self._membership_repo.find_by_user(user_id):
+            self._tear_down_membership(access, membership, triggered_by="manual")
 
-        if access.oauth_token:
-            try:
-                self._github.revoke_deploy_token(access.oauth_token)
-            except Exception:
-                pass
-
+        self._membership_repo.delete_for_user(user_id)
         self._access_repo.delete(str(access.id))
 
     # ------------------------------------------------------------------ #
@@ -136,145 +135,211 @@ class GithubAccessService:
     # ------------------------------------------------------------------ #
 
     def on_subscription_activated(self, user_id: str, plan_id: str) -> None:
-        """Add collaborator when subscription activates (if GitHub is connected)."""
+        """Ensure the plan's package when connected; no-op when not connected."""
         access = self._access_repo.find_by_user_id(user_id)
-        if not access or access.access_status == AccessStatus.REVOKED:
+        if not access:
+            return  # Not connected — connect re-resolves entitlements (D1).
+        package = self._package_repo.find_by_tariff_plan_id(plan_id)
+        if not package:
             return
-        pkg = self._package_repo.find_by_tariff_plan_id(plan_id)
-        if not pkg:
-            return
-        self._github.add_collaborator(
-            pkg.github_owner,
-            pkg.github_repo,
-            access.github_username,
-            pkg.github_protected_branch,
-        )
-        access.access_status = AccessStatus.ACTIVE
-        access.grace_expires_at = None
-        self._access_repo.save(access)
-        self._log_repo.log(
-            user_id, str(pkg.id), SyncAction.ADD_COLLABORATOR, "subscription_event"
+        self._ensure_collaborator(
+            user_id, package, access, triggered_by="subscription_event"
         )
 
     def on_subscription_cancelled(
         self, user_id: str, plan_id: str, trailing_days: int = 0
     ) -> None:
-        """Start grace period on subscription cancellation."""
-        access = self._access_repo.find_by_user_id(user_id)
-        if not access:
+        """Move the plan's membership into GRACE with an expiry."""
+        package = self._package_repo.find_by_tariff_plan_id(plan_id)
+        if not package:
             return
         days = trailing_days or self._grace_fallback_days
-        access.access_status = AccessStatus.GRACE
-        access.grace_expires_at = utcnow() + timedelta(days=days)
-        self._access_repo.save(access)
-        pkg = self._package_repo.find_by_tariff_plan_id(plan_id)
-        self._log_repo.log(
+        self._membership_repo.upsert(
             user_id,
-            str(pkg.id) if pkg else None,
-            SyncAction.GRACE_STARTED,
-            "subscription_event",
+            package.id,
+            status=MembershipStatus.GRACE.value,
+            grace_expires_at=utcnow() + timedelta(days=days),
+        )
+        self._log_repo.log(
+            user_id, str(package.id), SyncAction.GRACE_STARTED, "subscription_event"
         )
 
     def on_subscription_payment_failed(
         self, user_id: str, plan_id: str, trailing_days: int = 0
     ) -> None:
-        """Start grace period on payment failure."""
+        """Start the grace period (same as cancellation)."""
         self.on_subscription_cancelled(user_id, plan_id, trailing_days)
 
     def on_subscription_renewed(self, user_id: str, plan_id: str) -> None:
-        """Extend access on renewal — rotate deploy token."""
+        """Re-ensure access on renewal (no token rotation — D3)."""
         access = self._access_repo.find_by_user_id(user_id)
         if not access:
             return
-        pkg = self._package_repo.find_by_tariff_plan_id(plan_id)
-        if not pkg:
+        package = self._package_repo.find_by_tariff_plan_id(plan_id)
+        if not package:
             return
-        if access.deploy_token:
-            try:
-                self._github.revoke_deploy_token(access.deploy_token)
-            except Exception:
-                pass
-        new_token = self._github.create_deploy_token(
-            pkg.github_owner, pkg.github_repo, access.github_username
-        )
-        # Encrypted at rest by the EncryptedString TypeDecorator on the column (S05).
-        access.deploy_token = new_token
-        access.access_status = AccessStatus.ACTIVE
-        access.grace_expires_at = None
-        self._access_repo.save(access)
-        self._log_repo.log(
-            user_id, str(pkg.id), SyncAction.TOKEN_ROTATED, "subscription_event"
+        self._ensure_collaborator(
+            user_id, package, access, triggered_by="subscription_event"
         )
 
     # ------------------------------------------------------------------ #
-    # Grace period scheduler                                               #
+    # Grace period scheduler + acceptance verification                     #
     # ------------------------------------------------------------------ #
 
     def revoke_expired_grace_access(self) -> int:
-        """Revoke all access records where grace period has expired. Returns count."""
-        expired = self._access_repo.find_grace_expired(utcnow())
+        """Revoke every grace-expired membership. Returns the count."""
+        expired = self._membership_repo.find_grace_expired(utcnow())
+        access_cache: Dict[str, Optional[GhrmUserGithubAccess]] = {}
         count = 0
-        for access in expired:
-            packages = self._get_packages_for_user(str(access.user_id))
-            for pkg in packages:
-                self._github.remove_collaborator(
-                    pkg.github_owner, pkg.github_repo, access.github_username
-                )
-                if access.deploy_token:
-                    self._github.revoke_deploy_token(access.deploy_token)
-                self._log_repo.log(
-                    str(access.user_id),
-                    str(pkg.id),
-                    SyncAction.REMOVE_COLLABORATOR,
-                    "scheduler",
-                )
-            access.access_status = AccessStatus.REVOKED
-            access.deploy_token = None
-            self._access_repo.save(access)
+        for membership in expired:
+            user_id = str(membership.user_id)
+            if user_id not in access_cache:
+                access_cache[user_id] = self._access_repo.find_by_user_id(user_id)
+            access = access_cache[user_id]
+            if access:
+                self._tear_down_membership(access, membership, triggered_by="scheduler")
+            self._membership_repo.upsert(
+                membership.user_id,
+                membership.package_id,
+                status=MembershipStatus.REVOKED.value,
+                grace_expires_at=None,
+            )
             count += 1
         return count
+
+    def verify_acceptance(self, user_id: str) -> None:
+        """Promote INVITED memberships the user has accepted to ACTIVE."""
+        access = self._access_repo.find_by_user_id(user_id)
+        if not access:
+            return
+        for membership in self._membership_repo.find_by_user(user_id):
+            if membership.status != MembershipStatus.INVITED.value:
+                continue
+            package = self._resolve_package(membership)
+            if not package:
+                continue
+            if self._github.is_collaborator(
+                package.github_owner, package.github_repo, access.github_username
+            ):
+                self._membership_repo.upsert(
+                    membership.user_id,
+                    membership.package_id,
+                    status=MembershipStatus.ACTIVE.value,
+                    invitation_id=None,
+                )
 
     # ------------------------------------------------------------------ #
     # User-facing queries                                                  #
     # ------------------------------------------------------------------ #
 
     def get_access_status(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """Return current GitHub access record for a user, or None."""
+        """Identity + memberships for the user, or None when not connected."""
         access = self._access_repo.find_by_user_id(user_id)
-        return access.to_dict() if access else None
-
-    def get_install_token(self, user_id: str, package_slug: str) -> str:
-        """Return deploy token for a user/package combo (active subs only)."""
-        access = self._access_repo.find_by_user_id(user_id)
-        if not access or access.access_status != AccessStatus.ACTIVE:
-            raise GhrmGithubNotConnectedError("Active GitHub connection required")
-        return access.deploy_token or ""
+        if not access:
+            return None
+        memberships = self._membership_repo.find_by_user(user_id)
+        result = access.to_dict()
+        result["connected"] = True
+        result["memberships"] = [membership.to_dict() for membership in memberships]
+        return result
 
     # ------------------------------------------------------------------ #
     # Private helpers                                                      #
     # ------------------------------------------------------------------ #
 
-    def _get_packages_for_user(self, user_id: str):
-        """Return all active packages the user is subscribed to (simplified — checks all)."""
-        # In production this would join subscriptions; for now returns all active packages
-        result = self._package_repo.find_all(per_page=1000)
-        return [p for p in result["items"] if p.is_active]
-
-    def _sync_collaborators_for_user(
+    def _grant_entitled(
         self, user_id: str, access: GhrmUserGithubAccess, triggered_by: str
     ) -> None:
-        """Add user as collaborator for all their active subscribed packages."""
-        packages = self._get_packages_for_user(user_id)
-        for pkg in packages:
-            try:
-                self._github.add_collaborator(
-                    pkg.github_owner,
-                    pkg.github_repo,
-                    access.github_username,
-                    pkg.github_protected_branch,
-                )
-                self._log_repo.log(
-                    user_id, str(pkg.id), SyncAction.ADD_COLLABORATOR, triggered_by
-                )
-            except Exception:
-                pass
+        """Ensure a collaborator for every package the user is entitled to."""
+        # The port is typed in UUIDs; GHRM carries ids as UUID-strings (event
+        # payloads / g.user_id) and the subscription read model accepts either.
+        # Cast at this single typed boundary — no runtime conversion (which would
+        # break on non-UUID test fixtures).
+        for plan_id in self._entitlements.active_plan_ids(cast(UUID, user_id)):
+            package = self._package_repo.find_by_tariff_plan_id(str(plan_id))
+            if not package:
+                continue
+            self._ensure_collaborator(
+                user_id, package, access, triggered_by=triggered_by
+            )
+
+    def _ensure_collaborator(
+        self,
+        user_id: str,
+        package: Any,
+        access: GhrmUserGithubAccess,
+        triggered_by: str,
+    ) -> None:
+        """Single home for grant: add collaborator + upsert membership (DRY).
+
+        Only ``GithubAppClientError`` is caught — it is recorded as an ERROR
+        membership and a warning is logged. Any other exception propagates.
+        """
+        try:
+            result = self._github.add_collaborator(
+                package.github_owner,
+                package.github_repo,
+                access.github_username,
+                DEFAULT_COLLABORATOR_PERMISSION,
+            )
+            status = (
+                MembershipStatus.ACTIVE.value
+                if result.state == "active"
+                else MembershipStatus.INVITED.value
+            )
+            self._membership_repo.upsert(
+                user_id,
+                package.id,
+                status=status,
+                invitation_id=result.invitation_id,
+                invited_at=utcnow(),
+                last_error=None,
+            )
+            self._log_repo.log(
+                user_id, str(package.id), SyncAction.ADD_COLLABORATOR, triggered_by
+            )
+        except GithubAppClientError as exc:
+            self._membership_repo.upsert(
+                user_id,
+                package.id,
+                status=MembershipStatus.ERROR.value,
+                last_error=str(exc),
+            )
+            logger.warning(
+                "[GHRM] add_collaborator failed for %s/%s: %s",
+                package.github_owner,
+                package.github_repo,
+                exc,
+            )
+
+    def _tear_down_membership(
+        self, access: GhrmUserGithubAccess, membership: Any, triggered_by: str
+    ) -> None:
+        """Remove a collaborator or cancel a pending invitation for a membership."""
+        package = self._resolve_package(membership)
+        if not package:
+            return
+        if (
+            membership.status == MembershipStatus.INVITED.value
+            and membership.invitation_id
+        ):
+            self._github.cancel_invitation(
+                package.github_owner, package.github_repo, membership.invitation_id
+            )
+        else:
+            self._github.remove_collaborator(
+                package.github_owner, package.github_repo, access.github_username
+            )
+        self._log_repo.log(
+            str(membership.user_id),
+            str(membership.package_id),
+            SyncAction.REMOVE_COLLABORATOR,
+            triggered_by,
+        )
+
+    def _resolve_package(self, membership: Any) -> Optional[Any]:
+        """Return the membership's package, preferring the eager relationship."""
+        package = getattr(membership, "package", None)
+        if package is not None:
+            return package
+        return self._package_repo.find_by_id(str(membership.package_id))

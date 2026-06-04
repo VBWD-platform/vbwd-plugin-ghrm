@@ -7,7 +7,6 @@ class SyncAction:
     ADD_COLLABORATOR = "add_collaborator"
     REMOVE_COLLABORATOR = "remove_collaborator"
     GRACE_STARTED = "grace_started"
-    TOKEN_ROTATED = "token_rotated"
 
 
 class GhrmAccessLog(BaseModel):
