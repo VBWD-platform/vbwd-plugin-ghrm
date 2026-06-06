@@ -38,7 +38,7 @@ class IGithubAppClient(ABC):
 
     @abstractmethod
     def add_collaborator(
-        self, owner: str, repo: str, username: str, permission: str = "push"
+        self, owner: str, repo: str, username: str, permission: str = "pull"
     ) -> AddCollaboratorResult:
         """Invite/add a collaborator. 201 -> invited, 204 -> active; else raise."""
         ...
@@ -134,7 +134,7 @@ class MockGithubAppClient(IGithubAppClient):
         self._next_invitation_id: int = 1000
 
     def add_collaborator(
-        self, owner: str, repo: str, username: str, permission: str = "push"
+        self, owner: str, repo: str, username: str, permission: str = "pull"
     ) -> AddCollaboratorResult:
         if self.raise_on_add_collaborator:
             raise self.raise_on_add_collaborator

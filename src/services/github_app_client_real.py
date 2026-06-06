@@ -85,7 +85,7 @@ class GithubAppClient(IGithubAppClient):
         }
 
     def add_collaborator(
-        self, owner: str, repo: str, username: str, permission: str = "push"
+        self, owner: str, repo: str, username: str, permission: str = "pull"
     ) -> AddCollaboratorResult:
         """Invite/add a collaborator.
 

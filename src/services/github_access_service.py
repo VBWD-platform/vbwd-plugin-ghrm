@@ -14,6 +14,9 @@ from vbwd.utils.datetime_utils import utcnow
 
 from plugins.ghrm.src.models.ghrm_user_github_access import GhrmUserGithubAccess
 from plugins.ghrm.src.models.ghrm_repo_membership import MembershipStatus
+from plugins.ghrm.src.models.ghrm_software_package import (
+    resolve_effective_permission,
+)
 from plugins.ghrm.src.models.ghrm_access_log import SyncAction
 from plugins.ghrm.src.repositories.user_github_access_repository import (
     GhrmUserGithubAccessRepository,
@@ -31,7 +34,10 @@ from plugins.ghrm.src.services.ports import ISubscriptionEntitlements
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COLLABORATOR_PERMISSION = "push"
+# The granted GitHub permission is configurable per package (S51) — see
+# ``GhrmSoftwarePackage.collaborator_permission`` — but is clamped to read-only
+# ("pull") whenever ``allow_extensive_permissions`` is off (D3 guardrail). The
+# single decision home is ``resolve_effective_permission``.
 OAUTH_SCOPE = "read:user"
 
 
@@ -58,6 +64,7 @@ class GithubAccessService:
         oauth_client_secret: str = "",
         oauth_redirect_uri: str = "",
         grace_period_fallback_days: int = 7,
+        allow_extensive_permissions: bool = False,
     ) -> None:
         self._access_repo = access_repo
         self._membership_repo = membership_repo
@@ -69,6 +76,7 @@ class GithubAccessService:
         self._oauth_client_secret = oauth_client_secret
         self._oauth_redirect_uri = oauth_redirect_uri
         self._grace_fallback_days = grace_period_fallback_days
+        self._allow_extensive_permissions = allow_extensive_permissions
 
     # ------------------------------------------------------------------ #
     # OAuth flow                                                           #
@@ -280,7 +288,9 @@ class GithubAccessService:
                 package.github_owner,
                 package.github_repo,
                 access.github_username,
-                DEFAULT_COLLABORATOR_PERMISSION,
+                resolve_effective_permission(
+                    package, self._allow_extensive_permissions
+                ),
             )
             status = (
                 MembershipStatus.ACTIVE.value

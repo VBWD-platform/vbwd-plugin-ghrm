@@ -4,7 +4,11 @@ import secrets
 from datetime import datetime
 from vbwd.utils.datetime_utils import utcnow
 from typing import List, Dict, Any, Optional
-from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
+from plugins.ghrm.src.models.ghrm_software_package import (
+    GhrmSoftwarePackage,
+    ALLOWED_COLLABORATOR_PERMISSIONS,
+    DEFAULT_COLLABORATOR_PERMISSION,
+)
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync
 from plugins.ghrm.src.repositories.software_package_repository import (
     GhrmSoftwarePackageRepository,
@@ -29,6 +33,41 @@ class GhrmNotConfiguredError(Exception):
 
 class GhrmSubscriptionRequiredError(Exception):
     """Raised when install instructions are requested without active subscription."""
+
+
+class GhrmValidationError(Exception):
+    """Raised when a package field fails validation (e.g. an unknown permission)."""
+
+
+def validate_collaborator_permission(
+    value: Optional[str], allow_extensive: bool
+) -> str:
+    """Validate and normalise a package's GitHub collaborator permission.
+
+    Returns the least-privilege default when omitted (``None``); raises
+    :class:`GhrmValidationError` for any value outside the allowed set. This is
+    the single validation home reused by package create and update.
+
+    Security guardrail (D3): when ``allow_extensive`` is ``False`` only
+    ``DEFAULT_COLLABORATOR_PERMISSION`` ("pull", Read) is permitted — any
+    write-and-above value (push/triage/maintain/admin) is rejected so no admin
+    can grant write by mistake while the plugin flag is off.
+    """
+    if value is None:
+        return DEFAULT_COLLABORATOR_PERMISSION
+    if value not in ALLOWED_COLLABORATOR_PERMISSIONS:
+        allowed = ", ".join(ALLOWED_COLLABORATOR_PERMISSIONS)
+        raise GhrmValidationError(
+            f"Invalid collaborator_permission '{value}'. Must be one of: {allowed}"
+        )
+    if not allow_extensive and value != DEFAULT_COLLABORATOR_PERMISSION:
+        raise GhrmValidationError(
+            f"Cannot set collaborator_permission '{value}': extensive GitHub "
+            "permissions are disabled; only Read (pull) is allowed. Enable "
+            "'allow_extensive_github_permissions' in the GHRM plugin settings "
+            "to grant Write, Maintain or Admin access."
+        )
+    return value
 
 
 class SoftwarePackageService:

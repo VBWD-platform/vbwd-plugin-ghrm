@@ -17,7 +17,7 @@ from plugins.ghrm.src.services.github_app_client_real import GithubAppClientErro
 class TestMockAddCollaborator:
     def test_default_returns_invited_with_synthetic_id(self):
         client = MockGithubAppClient()
-        result = client.add_collaborator("acme", "widget", "octocat", "push")
+        result = client.add_collaborator("acme", "widget", "octocat", "pull")
         assert isinstance(result, AddCollaboratorResult)
         assert result.state == "invited"
         assert result.invitation_id is not None
@@ -25,7 +25,7 @@ class TestMockAddCollaborator:
     def test_members_already_returns_active(self):
         client = MockGithubAppClient()
         client.members_already.add(("acme", "widget", "octocat"))
-        result = client.add_collaborator("acme", "widget", "octocat", "push")
+        result = client.add_collaborator("acme", "widget", "octocat", "pull")
         assert result.state == "active"
         assert result.invitation_id is None
 
@@ -33,13 +33,13 @@ class TestMockAddCollaborator:
         client = MockGithubAppClient()
         client.raise_on_add_collaborator = GithubAppClientError("403 forbidden")
         with pytest.raises(GithubAppClientError):
-            client.add_collaborator("acme", "widget", "octocat", "push")
+            client.add_collaborator("acme", "widget", "octocat", "pull")
 
 
 class TestMockIsCollaborator:
     def test_false_until_accepted_then_true(self):
         client = MockGithubAppClient()
-        client.add_collaborator("acme", "widget", "octocat", "push")
+        client.add_collaborator("acme", "widget", "octocat", "pull")
         assert client.is_collaborator("acme", "widget", "octocat") is False
 
         client.accepted.add(("acme", "widget", "octocat"))
@@ -49,7 +49,7 @@ class TestMockIsCollaborator:
 class TestMockInvitations:
     def test_add_records_invitation_then_cancel_removes_it(self):
         client = MockGithubAppClient()
-        result = client.add_collaborator("acme", "widget", "octocat", "push")
+        result = client.add_collaborator("acme", "widget", "octocat", "pull")
         invitations = client.list_repo_invitations("acme", "widget")
         assert any(str(item["id"]) == result.invitation_id for item in invitations)
 

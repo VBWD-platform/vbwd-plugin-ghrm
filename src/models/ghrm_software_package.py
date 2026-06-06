@@ -1,7 +1,34 @@
 """GhrmSoftwarePackage model — software package tied to a tariff plan."""
+from typing import Any, Optional
+
 from vbwd.extensions import db
 from vbwd.models.base import BaseModel
 import secrets
+
+
+# Single source of truth for the GitHub collaborator permission levels a
+# package may grant. Stored as the raw GitHub permission string (extensible)
+# and validated against this set. ``pull`` (read) is the least-privilege
+# default. See GitHub's repository-collaborators permission model.
+ALLOWED_COLLABORATOR_PERMISSIONS = ("pull", "triage", "push", "maintain", "admin")
+DEFAULT_COLLABORATOR_PERMISSION = "pull"
+
+
+def resolve_effective_permission(package: Any, allow_extensive: bool) -> str:
+    """Return the GitHub permission a grant should actually use (D3 clamp).
+
+    The single, pure home for the "what permission do we grant" decision so
+    both the access service and any future caller agree (DRY). When extensive
+    permissions are disabled the effective permission is always
+    ``DEFAULT_COLLABORATOR_PERMISSION`` ("pull") regardless of the package's
+    stored level — this defends against a write+ value persisted while the
+    flag was on, then turned off. When enabled the package's configured level
+    is honoured, falling back to the least-privilege default when unset.
+    """
+    if not allow_extensive:
+        return DEFAULT_COLLABORATOR_PERMISSION
+    stored: Optional[str] = getattr(package, "collaborator_permission", None)
+    return stored or DEFAULT_COLLABORATOR_PERMISSION
 
 
 class GhrmSoftwarePackage(BaseModel):
@@ -33,6 +60,9 @@ class GhrmSoftwarePackage(BaseModel):
     download_counter = db.Column(db.Integer, nullable=False, default=0)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
+    collaborator_permission = db.Column(
+        db.String(16), nullable=False, default=DEFAULT_COLLABORATOR_PERMISSION
+    )
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -59,6 +89,7 @@ class GhrmSoftwarePackage(BaseModel):
             "download_counter": self.download_counter,
             "is_active": self.is_active,
             "sort_order": self.sort_order,
+            "collaborator_permission": self.collaborator_permission,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

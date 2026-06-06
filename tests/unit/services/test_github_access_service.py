@@ -37,6 +37,7 @@ def _make_service(
     github=None,
     entitlements=None,
     grace_period_fallback_days=7,
+    allow_extensive_permissions=True,
 ):
     return GithubAccessService(
         access_repo=access_repo or MagicMock(),
@@ -49,6 +50,7 @@ def _make_service(
         oauth_client_secret="test-client-secret",
         oauth_redirect_uri="http://localhost/callback",
         grace_period_fallback_days=grace_period_fallback_days,
+        allow_extensive_permissions=allow_extensive_permissions,
     )
 
 
@@ -74,6 +76,7 @@ def _make_package(pkg_id="pkg-1", slug="my-pkg", owner="acme", repo="my-repo"):
     pkg.slug = slug
     pkg.github_owner = owner
     pkg.github_repo = repo
+    pkg.collaborator_permission = "pull"
     return pkg
 
 
@@ -293,6 +296,75 @@ class TestEnsureCollaboratorErrorSurfacing:
         )
         with pytest.raises(ValueError, match="unexpected boom"):
             svc.handle_oauth_callback("user-1", "code-a")
+
+
+class TestCollaboratorPermissionFromPackage:
+    """The collaborator grant uses the *package's* configured level (S51).
+
+    The permission is configurable per package (GHRM's per-plan entity), so a
+    ``push`` package grants ``push`` while a package with no level falls back
+    to the least-privilege default ``"pull"``. This supersedes the S49
+    fixed-``pull`` guard.
+    """
+
+    def _run_grant_and_capture(self, package_permission, allow_extensive=True):
+        github = MockGithubAppClient()
+        _configure_oauth(github, "code-a")
+        captured_permissions = []
+        original_add_collaborator = github.add_collaborator
+
+        def spy_add_collaborator(owner, repo, username, permission="pull"):
+            captured_permissions.append(permission)
+            return original_add_collaborator(owner, repo, username, permission)
+
+        github.add_collaborator = spy_add_collaborator
+
+        pkg = _make_package()
+        pkg.collaborator_permission = package_permission
+        package_repo = MagicMock()
+        package_repo.find_by_tariff_plan_id.return_value = pkg
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = None
+        access_repo.save.side_effect = lambda a: a
+
+        svc = _make_service(
+            access_repo=access_repo,
+            package_repo=package_repo,
+            github=github,
+            entitlements=_StubEntitlements(plan_ids=["plan-A"]),
+            allow_extensive_permissions=allow_extensive,
+        )
+        svc.handle_oauth_callback("user-1", "code-a")
+        return captured_permissions
+
+    def test_push_package_grants_push(self):
+        assert self._run_grant_and_capture("push") == ["push"]
+
+    def test_package_without_level_falls_back_to_pull(self):
+        assert self._run_grant_and_capture(None) == ["pull"]
+
+
+class TestGrantClampWhenExtensiveDisabled:
+    """D3 layer 2: the grant is clamped to ``pull`` whenever the flag is off.
+
+    Defense in depth — even if a package carries a write+ value (stored while
+    the flag was on, then turned off), the effective grant must be ``pull``.
+    When the flag is on the package's configured level is honoured.
+    """
+
+    _capture = TestCollaboratorPermissionFromPackage._run_grant_and_capture
+
+    def test_flag_off_clamps_push_package_to_pull(self):
+        assert self._capture("push", allow_extensive=False) == ["pull"]
+
+    def test_flag_off_clamps_admin_package_to_pull(self):
+        assert self._capture("admin", allow_extensive=False) == ["pull"]
+
+    def test_flag_off_pull_package_stays_pull(self):
+        assert self._capture("pull", allow_extensive=False) == ["pull"]
+
+    def test_flag_on_push_package_grants_push(self):
+        assert self._capture("push", allow_extensive=True) == ["push"]
 
 
 class TestOnSubscriptionActivated:

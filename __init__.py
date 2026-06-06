@@ -15,6 +15,7 @@ DEFAULT_CONFIG = {
     "software_category_slugs": ["backend", "fe-user", "fe-admin"],
     "software_detail_cms_layout_slug": "ghrm-software-detail",
     "grace_period_fallback_days": 7,
+    "allow_extensive_github_permissions": False,
 }
 
 
@@ -124,6 +125,9 @@ class GhrmPlugin(BasePlugin):
             oauth_client_secret=cfg.get("github_oauth_client_secret", ""),
             oauth_redirect_uri=cfg.get("github_oauth_redirect_uri", ""),
             grace_period_fallback_days=cfg.get("grace_period_fallback_days", 7),
+            allow_extensive_permissions=bool(
+                cfg.get("allow_extensive_github_permissions", False)
+            ),
         )
 
     def register_event_handlers(self, bus: Any) -> None:

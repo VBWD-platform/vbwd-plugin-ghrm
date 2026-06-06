@@ -56,6 +56,8 @@ from plugins.ghrm.src.services.software_package_service import (
     GhrmPackageNotFoundError,
     GhrmSyncAuthError,
     GhrmNotConfiguredError,
+    GhrmValidationError,
+    validate_collaborator_permission,
 )
 from plugins.ghrm.src.services.github_access_service import (
     GithubAccessService,
@@ -146,6 +148,9 @@ def _access_svc() -> GithubAccessService:
         oauth_client_secret=cfg.get("github_oauth_client_secret", ""),
         oauth_redirect_uri=cfg.get("github_oauth_redirect_uri", ""),
         grace_period_fallback_days=cfg.get("grace_period_fallback_days", 7),
+        allow_extensive_permissions=bool(
+            cfg.get("allow_extensive_github_permissions", False)
+        ),
     )
 
 
@@ -188,10 +193,14 @@ def get_public_config():
     detail_slug = cfg.get("software_detail_cms_page_slug") or fb.get(
         "software_detail_cms_page_slug", "ghrm-software-detail"
     )
+    # D3 security policy: exposed so fe-admin can decide whether to offer the
+    # Write/Maintain/Admin access-level options. Defaults to False (Read only).
+    allow_extensive = bool(cfg.get("allow_extensive_github_permissions", False))
     return jsonify(
         {
             "catalogue_page_slug": catalogue_slug,
             "detail_page_slug": detail_slug,
+            "allow_extensive_github_permissions": allow_extensive,
         }
     )
 
@@ -521,6 +530,13 @@ def admin_create_package():
     repo = GhrmSoftwarePackageRepository(db.session)
     if repo.find_by_slug(body["slug"]):
         return jsonify({"error": "Slug already exists"}), 409
+    allow_extensive = bool(_cfg().get("allow_extensive_github_permissions", False))
+    try:
+        collaborator_permission = validate_collaborator_permission(
+            body.get("collaborator_permission"), allow_extensive=allow_extensive
+        )
+    except GhrmValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
     pkg = GhrmSoftwarePackage(
         tariff_plan_id=body["tariff_plan_id"],
         name=body["name"],
@@ -534,6 +550,7 @@ def admin_create_package():
         tech_specs=body.get("tech_specs", {}),
         related_slugs=body.get("related_slugs", []),
         sort_order=body.get("sort_order", 0),
+        collaborator_permission=collaborator_permission,
     )
     repo.save(pkg)
     return jsonify(pkg.to_dict()), 201
@@ -565,6 +582,14 @@ def admin_update_package(pkg_id):
     for field in updatable:
         if field in body:
             setattr(pkg, field, body[field])
+    if "collaborator_permission" in body:
+        allow_extensive = bool(_cfg().get("allow_extensive_github_permissions", False))
+        try:
+            pkg.collaborator_permission = validate_collaborator_permission(
+                body["collaborator_permission"], allow_extensive=allow_extensive
+            )
+        except GhrmValidationError as exc:
+            return jsonify({"error": str(exc)}), 400
     # Sync overrides
     if any(
         k in body

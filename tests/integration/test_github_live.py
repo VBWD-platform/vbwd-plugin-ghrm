@@ -102,7 +102,7 @@ def test_collaborator_invite_list_remove_lifecycle(live_client):
     # Pre-clean so a previous interrupted run can't make this flaky.
     _cleanup(live_client, owner, repo, username)
     try:
-        result = live_client.add_collaborator(owner, repo, username, "push")
+        result = live_client.add_collaborator(owner, repo, username, "pull")
         assert result.state in ("invited", "active")
 
         if result.state == "invited":

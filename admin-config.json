@@ -24,6 +24,12 @@
           "component": "input",
           "inputType": "text",
           "description": "Absolute path to the .pem private key file inside the container (e.g. /app/plugins/ghrm/github-app.pem)"
+        },
+        {
+          "key": "allow_extensive_github_permissions",
+          "label": "Allow extensive GitHub permissions (beyond Read)",
+          "component": "checkbox",
+          "description": "SECURITY: Off by default. While off, every package grants only Read (pull) access regardless of its configured level, and the admin form rejects Write/Maintain/Admin. Enable this deliberately to let packages grant Write, Maintain or Admin access on their GitHub repository."
         }
       ]
     },

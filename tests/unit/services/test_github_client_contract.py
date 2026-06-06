@@ -34,7 +34,7 @@ def _make_client(handler) -> GithubAppClient:
 
 
 class TestAddCollaborator:
-    def test_issues_put_with_push_permission_and_headers(self):
+    def test_issues_put_with_pull_permission_and_headers(self):
         captured = {}
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -46,7 +46,7 @@ class TestAddCollaborator:
             return httpx.Response(201, json={"id": 555})
 
         client = _make_client(handler)
-        result = client.add_collaborator("acme", "widget", "octocat", "push")
+        result = client.add_collaborator("acme", "widget", "octocat", "pull")
 
         assert captured["method"] == "PUT"
         assert (
@@ -56,7 +56,7 @@ class TestAddCollaborator:
         assert captured["auth"] == f"Bearer {INSTALLATION_TOKEN}"
         assert captured["api_version"] == "2022-11-28"
         assert b'"permission"' in captured["body"]
-        assert b'"push"' in captured["body"]
+        assert b'"pull"' in captured["body"]
         assert result == AddCollaboratorResult(state="invited", invitation_id="555")
 
     def test_201_maps_to_invited_with_invitation_id(self):
@@ -64,7 +64,7 @@ class TestAddCollaborator:
             return httpx.Response(201, json={"id": 9001})
 
         result = _make_client(handler).add_collaborator(
-            "acme", "widget", "octocat", "push"
+            "acme", "widget", "octocat", "pull"
         )
         assert result.state == "invited"
         assert result.invitation_id == "9001"
@@ -74,7 +74,7 @@ class TestAddCollaborator:
             return httpx.Response(204)
 
         result = _make_client(handler).add_collaborator(
-            "acme", "widget", "octocat", "push"
+            "acme", "widget", "octocat", "pull"
         )
         assert result.state == "active"
         assert result.invitation_id is None
@@ -84,14 +84,14 @@ class TestAddCollaborator:
             return httpx.Response(403, text="forbidden-detail")
 
         with pytest.raises(GithubAppClientError, match="forbidden-detail"):
-            _make_client(handler).add_collaborator("acme", "widget", "octocat", "push")
+            _make_client(handler).add_collaborator("acme", "widget", "octocat", "pull")
 
     def test_404_raises(self):
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(404, text="not found")
 
         with pytest.raises(GithubAppClientError):
-            _make_client(handler).add_collaborator("acme", "widget", "octocat", "push")
+            _make_client(handler).add_collaborator("acme", "widget", "octocat", "pull")
 
 
 class TestIsCollaborator:
