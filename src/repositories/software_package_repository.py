@@ -1,7 +1,6 @@
 """GhrmSoftwarePackageRepository — data access for software packages."""
 from typing import Optional, List, Dict, Any
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
-from vbwd.services.catalog_read_model import resolve_catalog_read_model
 from vbwd.extensions import db
 
 
@@ -59,10 +58,16 @@ class GhrmSoftwarePackageRepository:
             GhrmSoftwarePackage.is_active == True  # noqa: E712
         )
         if category_slug:
-            # Plans in the category come from the catalog port (no subscription
-            # model import). Empty list ⇒ no matching packages (in_([]) matches
-            # nothing), mirroring the prior JOIN against an empty category.
-            plan_ids = resolve_catalog_read_model().plan_ids_in_category(category_slug)
+            # Plans in the category come from the subscription-owned catalog
+            # read model (ghrm declares dependencies=["subscription"]); no
+            # subscription model import here. Empty list ⇒ no matching packages
+            # (in_([]) matches nothing), mirroring the prior JOIN against an
+            # empty category.
+            from plugins.subscription.subscription.services.catalog_read_model import (
+                CatalogReadModel,
+            )
+
+            plan_ids = CatalogReadModel().plan_ids_in_category(category_slug)
             q = q.filter(GhrmSoftwarePackage.tariff_plan_id.in_(plan_ids))
         if query:
             term = f"%{query}%"

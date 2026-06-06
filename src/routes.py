@@ -64,6 +64,7 @@ from plugins.ghrm.src.services.github_access_service import (
     GhrmOAuthError,
 )
 from plugins.ghrm.src.services.github_app_client import IGithubAppClient
+from plugins.ghrm.src.services.github_app_client_real import GithubAppClientError
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 
 logger = logging.getLogger(__name__)
@@ -210,7 +211,9 @@ def list_categories():
     """Return the configured software category slugs and their DB names as labels."""
     import json as _json  # noqa: E401
     import os as _os
-    from vbwd.services.catalog_read_model import resolve_catalog_read_model
+    from plugins.subscription.subscription.services.catalog_read_model import (
+        CatalogReadModel,
+    )
 
     cfg = _cfg()
     slugs = cfg.get("software_category_slugs") or []
@@ -222,8 +225,10 @@ def list_categories():
                 slugs = _json.load(_f).get("software_category_slugs", [])
         except Exception:
             slugs = []
-    # Look up real names via the catalog port; fall back to slug-derived title.
-    db_cats = resolve_catalog_read_model().category_labels_by_slugs(slugs)
+    # Look up real names via the subscription-owned catalog read model
+    # (ghrm declares dependencies=["subscription"]); fall back to a
+    # slug-derived title when a category is unknown.
+    db_cats = CatalogReadModel().category_labels_by_slugs(slugs)
     categories = [
         {"slug": s, "label": db_cats.get(s, s.replace("-", " ").title())} for s in slugs
     ]
@@ -380,6 +385,9 @@ def sync_package():
         return jsonify({"error": "GitHub App not configured — sync unavailable"}), 503
     except GhrmSyncAuthError as e:
         return jsonify({"error": str(e)}), 403
+    except GithubAppClientError as e:
+        logger.warning(f"[GHRM] sync unavailable — GitHub call failed: {e}")
+        return jsonify({"error": "GitHub unavailable — sync unavailable"}), 503
     except Exception as e:
         logger.error(f"[GHRM] sync error: {e}", exc_info=True)
         return jsonify({"error": "Sync failed"}), 500
@@ -655,6 +663,9 @@ def admin_sync_package(pkg_id):
         return jsonify({"error": str(e)}), 503
     except GhrmSyncAuthError as e:
         return jsonify({"error": str(e)}), 503
+    except GithubAppClientError as e:
+        logger.warning(f"[GHRM] admin sync unavailable — GitHub call failed: {e}")
+        return jsonify({"error": "GitHub unavailable — sync unavailable"}), 503
     except Exception as e:
         logger.error(f"[GHRM] admin sync error: {e}", exc_info=True)
         return jsonify({"error": "Sync failed"}), 500
@@ -692,6 +703,9 @@ def admin_preview_field(pkg_id, field):
         return jsonify({"error": str(e)}), 404
     except (GhrmNotConfiguredError, GithubNotConfiguredError, GhrmSyncAuthError) as e:
         return jsonify({"error": str(e)}), 503
+    except GithubAppClientError as e:
+        logger.warning(f"[GHRM] preview unavailable — GitHub call failed: {e}")
+        return jsonify({"error": "GitHub unavailable — preview unavailable"}), 503
     except Exception as e:
         logger.error(f"[GHRM] preview error: {e}", exc_info=True)
         return jsonify({"error": "Preview failed"}), 500
@@ -719,6 +733,9 @@ def admin_sync_field(pkg_id, field):
         return jsonify({"error": str(e)}), 404
     except (GhrmNotConfiguredError, GithubNotConfiguredError, GhrmSyncAuthError) as e:
         return jsonify({"error": str(e)}), 503
+    except GithubAppClientError as e:
+        logger.warning(f"[GHRM] sync_field unavailable — GitHub call failed: {e}")
+        return jsonify({"error": "GitHub unavailable — sync unavailable"}), 503
     except Exception as e:
         logger.error(f"[GHRM] sync_field error: {e}", exc_info=True)
         return jsonify({"error": "Sync failed"}), 500
