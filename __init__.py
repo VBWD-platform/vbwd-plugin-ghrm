@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 DEFAULT_CONFIG = {
     "github_app_id": "",
-    "github_app_private_key_path": "/app/plugins/ghrm/github-app.pem",
+    "github_app_private_key_path": "/app/var/ghrm/auth/github-app.pem",
     "github_installation_id": "",
     "github_oauth_client_id": "",
     "github_oauth_client_secret": "",

@@ -23,7 +23,7 @@
           "label": "Private Key Path",
           "component": "input",
           "inputType": "text",
-          "description": "Absolute path to the .pem private key file inside the container (e.g. /app/plugins/ghrm/github-app.pem)"
+          "description": "Absolute path to the .pem private key file inside the container. Store it in the host-mounted var dir, e.g. /app/var/ghrm/auth/github-app.pem (persists across rebuilds; never baked into the image)."
         },
         {
           "key": "allow_extensive_github_permissions",
