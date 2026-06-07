@@ -124,6 +124,9 @@ class MockGithubAppClient(IGithubAppClient):
         self.releases: List[ReleaseDTO] = []
         self.screenshot_urls: List[str] = []
         self.raise_on_add_collaborator: Optional[Exception] = None
+        # Simulate a GitHub-side teardown failure (e.g. App lacks permission to
+        # remove a collaborator → 403) for remove_collaborator / cancel_invitation.
+        self.raise_on_remove_collaborator: Optional[Exception] = None
         self.raise_on_exchange: Optional[Exception] = None
         # (owner, repo, username) triples that simulate "already a member" (204).
         self.members_already: set = set()
@@ -150,6 +153,8 @@ class MockGithubAppClient(IGithubAppClient):
         return AddCollaboratorResult(state="invited", invitation_id=invitation_id)
 
     def remove_collaborator(self, owner: str, repo: str, username: str) -> bool:
+        if self.raise_on_remove_collaborator:
+            raise self.raise_on_remove_collaborator
         key = (owner, repo)
         self.collaborators.get(key, set()).discard(username)
         return True
@@ -161,6 +166,8 @@ class MockGithubAppClient(IGithubAppClient):
         return list(self.invitations.get((owner, repo), []))
 
     def cancel_invitation(self, owner: str, repo: str, invitation_id: str) -> None:
+        if self.raise_on_remove_collaborator:
+            raise self.raise_on_remove_collaborator
         key = (owner, repo)
         self.invitations[key] = [
             item

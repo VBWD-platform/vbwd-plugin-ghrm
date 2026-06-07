@@ -66,10 +66,13 @@
       "fields": [
         {
           "key": "software_category_slugs",
-          "label": "Software Category Slugs",
-          "component": "input",
-          "inputType": "text",
-          "description": "Comma-separated list of tariff plan category slugs that expose the Software tab on plan edit forms (e.g. backend,fe-user,fe-admin)"
+          "label": "Software Categories",
+          "component": "dual-list",
+          "optionsEndpoint": "/admin/tarif-plan-categories",
+          "optionsKey": "categories",
+          "valueKey": "slug",
+          "labelKey": "name",
+          "description": "Select which tariff-plan categories are treated as software. Plans assigned to a selected category expose the Software tab, and populate-ghrm builds a /category/<slug> catalogue page per selected category. This is the single source of truth for software categories."
         },
         {
           "key": "software_catalogue_cms_page_slug",

@@ -82,8 +82,30 @@ class GhrmPlugin(BasePlugin):
             {"key": "ghrm.configure", "label": "GHRM settings", "group": "GHRM"},
         ]
 
+    def _register_data_exchangers(self) -> None:
+        """Register the GHRM entity exchangers into the data-exchange seam.
+
+        Core declares none of these (it stays agnostic); the plugin adds them on
+        enable through the shared ``db.session`` so GHRM packages appear on the
+        generic Settings → Import/Export page. Clear-safe: re-registering
+        replaces by key (per-test app re-enable).
+        """
+        import logging
+
+        try:
+            from vbwd.extensions import db
+            from plugins.ghrm.src.services.data_exchange.ghrm_exchangers import (
+                register_ghrm_exchangers,
+            )
+
+            register_ghrm_exchangers(db.session)
+        except Exception as exchanger_error:
+            logging.getLogger(__name__).warning(
+                "[ghrm] Failed to register data exchangers: %s", exchanger_error
+            )
+
     def on_enable(self) -> None:
-        pass
+        self._register_data_exchangers()
 
     def _make_access_service(self):
         """Composition root for GithubAccessService.

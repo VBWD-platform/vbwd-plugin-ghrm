@@ -689,6 +689,50 @@ class TestDisconnectGithub:
         membership_repo.delete_for_user.assert_called_once_with("user-1")
         access_repo.delete.assert_called_once_with("access-id-1")
 
+    def test_github_teardown_failure_still_completes_local_disconnect(self):
+        """A GitHub 403 on remove_collaborator must NOT 500 the disconnect.
+
+        The App can lack permission to remove a collaborator ("Resource not
+        accessible by integration"); the user's local identity + memberships
+        must still be deleted (best-effort teardown).
+        """
+        github = MockGithubAppClient()
+        pkg = _make_package()
+        github.collaborators[(pkg.github_owner, pkg.github_repo)] = {"octocat"}
+        github.raise_on_remove_collaborator = GithubAppClientError(
+            'remove_collaborator failed: 403 {"message":"Resource not '
+            'accessible by integration"}'
+        )
+
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+
+        membership = MagicMock()
+        membership.user_id = "user-1"
+        membership.package_id = pkg.id
+        membership.status = MembershipStatus.ACTIVE.value
+        membership.invitation_id = None
+        membership.package = pkg
+        membership_repo = MagicMock()
+        membership_repo.find_by_user.return_value = [membership]
+
+        package_repo = MagicMock()
+        package_repo.find_by_id.return_value = pkg
+
+        svc = _make_service(
+            access_repo=access_repo,
+            membership_repo=membership_repo,
+            package_repo=package_repo,
+            github=github,
+        )
+
+        # Must NOT raise despite the GitHub-side 403.
+        svc.disconnect_github("user-1")
+
+        membership_repo.delete_for_user.assert_called_once_with("user-1")
+        access_repo.delete.assert_called_once_with("access-id-1")
+
     def test_noop_when_no_access(self):
         access_repo = MagicMock()
         access_repo.find_by_user_id.return_value = None

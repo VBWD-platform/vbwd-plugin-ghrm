@@ -325,21 +325,38 @@ class GithubAccessService:
     def _tear_down_membership(
         self, access: GhrmUserGithubAccess, membership: Any, triggered_by: str
     ) -> None:
-        """Remove a collaborator or cancel a pending invitation for a membership."""
+        """Remove a collaborator or cancel a pending invitation for a membership.
+
+        Best-effort: a GitHub-side failure (e.g. the App lacks permission to
+        remove a collaborator → 403 "Resource not accessible by integration")
+        is logged and swallowed so the user's disconnect always completes. The
+        local access record + memberships are still deleted; only the
+        GitHub-side removal is skipped. Mirrors the add path's handling.
+        """
         package = self._resolve_package(membership)
         if not package:
             return
-        if (
-            membership.status == MembershipStatus.INVITED.value
-            and membership.invitation_id
-        ):
-            self._github.cancel_invitation(
-                package.github_owner, package.github_repo, membership.invitation_id
+        try:
+            if (
+                membership.status == MembershipStatus.INVITED.value
+                and membership.invitation_id
+            ):
+                self._github.cancel_invitation(
+                    package.github_owner, package.github_repo, membership.invitation_id
+                )
+            else:
+                self._github.remove_collaborator(
+                    package.github_owner, package.github_repo, access.github_username
+                )
+        except GithubAppClientError as exc:
+            logger.warning(
+                "[GHRM] tear-down (remove collaborator / cancel invite) failed "
+                "for %s/%s: %s — continuing disconnect",
+                package.github_owner,
+                package.github_repo,
+                exc,
             )
-        else:
-            self._github.remove_collaborator(
-                package.github_owner, package.github_repo, access.github_username
-            )
+            return
         self._log_repo.log(
             str(membership.user_id),
             str(membership.package_id),
