@@ -118,6 +118,7 @@ def build_ghrm_exchangers(session: Any) -> List[EntityExchanger]:
                 "collaborator_permission",
             ],
             secret_fields=frozenset({"sync_api_key", "github_installation_id"}),
+            supported_formats=frozenset({"json", "csv"}),
             view_permission=PERM_PACKAGES_VIEW,
             manage_permission=PERM_PACKAGES_MANAGE,
         ),

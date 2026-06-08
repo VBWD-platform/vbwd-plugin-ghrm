@@ -101,3 +101,4 @@ class TestRegistration:
         exchanger = data_exchange_registry.get("ghrm_packages")
         assert exchanger is not None
         assert exchanger.cluster == CLUSTER_SALES
+        assert "csv" in exchanger.supported_formats
