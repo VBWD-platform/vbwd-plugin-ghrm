@@ -48,6 +48,14 @@ class TestToDict:
         membership.last_error = None
         membership.created_at = datetime(2026, 5, 1, 9, 0, 0)
         membership.updated_at = datetime(2026, 5, 2, 9, 0, 0)
+        membership.repo_grants = [
+            {
+                "owner": "acme",
+                "repo": "my-repo",
+                "status": "active",
+                "invitation_id": None,
+            }
+        ]
         membership.package = _StubPackage(slug="my-pkg", name="My Package")
         return membership
 
@@ -60,6 +68,18 @@ class TestToDict:
         assert data["status"] == "active"
         assert data["invitation_id"] == "inv-123"
         assert data["last_error"] is None
+
+    def test_includes_per_repo_grants(self):
+        membership = self._build_membership()
+        data = membership.to_dict()
+        assert data["repo_grants"] == [
+            {
+                "owner": "acme",
+                "repo": "my-repo",
+                "status": "active",
+                "invitation_id": None,
+            }
+        ]
 
     def test_timestamps_are_isoformatted(self):
         membership = self._build_membership()
@@ -87,6 +107,7 @@ class TestToDict:
         membership.last_error = None
         membership.created_at = None
         membership.updated_at = None
+        membership.repo_grants = None
         membership.package = None
         data = membership.to_dict()
         assert data["invited_at"] is None
@@ -95,3 +116,4 @@ class TestToDict:
         assert data["updated_at"] is None
         assert data["package_slug"] is None
         assert data["package_name"] is None
+        assert data["repo_grants"] == []
