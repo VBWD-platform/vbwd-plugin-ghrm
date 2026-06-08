@@ -7,6 +7,10 @@ if TYPE_CHECKING:
 
 DEFAULT_CONFIG = {
     "github_app_id": "",
+    # Externally provisioned (ops-placed, read-only) GitHub App RSA key. Read via
+    # the core FilesystemManager (secrets perms posture + path confinement, S58.4).
+    # Default kept at the legacy path for back-compat; NEW installs may point this
+    # at the secrets namespace, e.g. "/app/var/secrets/ghrm/github-app.pem".
     "github_app_private_key_path": "/app/var/ghrm/auth/github-app.pem",
     "github_installation_id": "",
     "github_oauth_client_id": "",

@@ -70,12 +70,59 @@ from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 logger = logging.getLogger(__name__)
 ghrm_bp = Blueprint("ghrm", __name__)
 
+# Namespace key used for the confined PEM read. The GitHub App private key is
+# externally provisioned (placed by ops, read-only from the app's view) and is
+# stored plaintext, so this namespace mirrors the core ``secrets`` perms posture
+# (0700 dir / 0600 file) WITHOUT encrypt-at-rest — we do not control how the key
+# is written, and forcing decryption on a plaintext key would corrupt the read.
+_PEM_NAMESPACE = "secrets"
+
 
 # ─── Dependency factories ────────────────────────────────────────────────────
 
 
 class GithubNotConfiguredError(Exception):
     """Raised when GitHub App credentials are absent or incomplete."""
+
+
+def read_private_key_pem(pem_path: str) -> str:
+    """Return the GitHub App private key (PEM) read through the FilesystemManager.
+
+    Routes the read through a :class:`LocalFilesystemManager` so the key gets
+    path confinement (realpath-within-namespace — no ``..``/symlink escape) and
+    the secrets perms posture (0700 dir / 0600 file), while keeping external
+    provisioning working: the configured absolute path is honoured EXACTLY by
+    pinning the namespace root to the file's directory and reading its basename.
+
+    The key is plaintext (externally placed), so the namespace does NOT decrypt.
+
+    Raises:
+        FileNotFoundError: the configured key file does not exist (preserves the
+            prior bare-``open`` semantics so callers keep their 503 path).
+        ValueError: the configured path escapes its pinned directory (traversal).
+    """
+    from vbwd.services.filesystem.local import LocalFilesystemManager
+    from vbwd.services.filesystem.ports import NamespacePolicy, WriteMode
+    from vbwd.services.filesystem._common import (
+        SECRETS_DIR_MODE,
+        SECRETS_FILE_MODE,
+        VAR_ROOT_KEY,
+    )
+
+    pem_directory = os.path.dirname(os.path.abspath(pem_path))
+    pem_filename = os.path.basename(pem_path)
+    plaintext_secrets_policy = NamespacePolicy(
+        write_mode=WriteMode.ATOMIC_REPLACE,
+        dir_mode=SECRETS_DIR_MODE,
+        file_mode=SECRETS_FILE_MODE,
+        encrypt=False,
+        base_root=VAR_ROOT_KEY,
+    )
+    filesystem_manager = LocalFilesystemManager(
+        namespaces={_PEM_NAMESPACE: plaintext_secrets_policy},
+        namespace_roots={_PEM_NAMESPACE: pem_directory},
+    )
+    return filesystem_manager.read_text(_PEM_NAMESPACE, pem_filename)
 
 
 def _make_github_client(cfg: dict) -> IGithubAppClient:
@@ -106,8 +153,7 @@ def _make_github_client(cfg: dict) -> IGithubAppClient:
         )
     from plugins.ghrm.src.services.github_app_client_real import GithubAppClient
 
-    with open(pem_path, "r") as f:
-        private_key = f.read()
+    private_key = read_private_key_pem(pem_path)
     return GithubAppClient(
         app_id=str(app_id),
         private_key=private_key,
