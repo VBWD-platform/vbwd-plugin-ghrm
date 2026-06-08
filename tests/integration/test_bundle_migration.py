@@ -181,9 +181,9 @@ class TestBundleMigration:
         )
         migration_connection.execute(
             text(
-                "INSERT INTO vbwd_user (id, email, password_hash, is_active, "
-                "created_at, updated_at, version) VALUES "
-                "(:id, :email, 'x', true, now(), now(), 1)"
+                "INSERT INTO vbwd_user (id, email, password_hash, status, role, "
+                "has_used_trial, created_at, updated_at, version) VALUES "
+                "(:id, :email, 'x', 'ACTIVE', 'USER', false, now(), now(), 1)"
             ),
             {"id": user_id, "email": f"u-{uuid4().hex[:8]}@example.com"},
         )

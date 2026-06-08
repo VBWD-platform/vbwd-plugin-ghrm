@@ -1,5 +1,5 @@
 """GhrmSoftwarePackage model — software package tied to a tariff plan."""
-from typing import Any, Optional
+from typing import Any, Iterable, List, Optional, Tuple
 
 from vbwd.extensions import db
 from vbwd.models.base import BaseModel
@@ -12,6 +12,21 @@ import secrets
 # default. See GitHub's repository-collaborators permission model.
 ALLOWED_COLLABORATOR_PERMISSIONS = ("pull", "triage", "push", "maintain", "admin")
 DEFAULT_COLLABORATOR_PERMISSION = "pull"
+
+# Single source of truth for the package discriminator (S59): a ``single`` repo
+# (today's behaviour) or a ``bundle`` resolving to many curated repos. Reused by
+# the validation helpers.
+ALLOWED_PACKAGE_KINDS = ("single", "bundle")
+DEFAULT_PACKAGE_KIND = "single"
+
+
+def _dedupe(pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """Return the pairs with duplicates removed, preserving first-seen order."""
+    seen: List[Tuple[str, str]] = []
+    for pair in pairs:
+        if pair not in seen:
+            seen.append(pair)
+    return seen
 
 
 def resolve_effective_permission(package: Any, allow_extensive: bool) -> str:
@@ -63,12 +78,30 @@ class GhrmSoftwarePackage(BaseModel):
     collaborator_permission = db.Column(
         db.String(16), nullable=False, default=DEFAULT_COLLABORATOR_PERMISSION
     )
-
-    __table_args__ = (
-        db.UniqueConstraint(
-            "github_owner", "github_repo", name="uq_ghrm_pkg_owner_repo"
-        ),
+    # S59: discriminator + curated repo list. ``github_owner/github_repo`` stays
+    # the representative repo (detail/sync) in both modes; a bundle additionally
+    # grants every repo in ``bundle_repos``. UNIQUE(owner, repo) is dropped (D4)
+    # because a repo may legitimately appear in more than one package.
+    package_kind = db.Column(
+        db.String(16),
+        nullable=False,
+        default=DEFAULT_PACKAGE_KIND,
+        server_default=DEFAULT_PACKAGE_KIND,
     )
+    bundle_repos = db.Column(db.JSON, nullable=False, default=list, server_default="[]")
+
+    def repo_targets(self) -> List[Tuple[str, str]]:
+        """The ``(owner, repo)`` pairs a grant must cover (the only repo seam).
+
+        Single -> the one representative repo; bundle -> the curated
+        ``bundle_repos`` list, deduped and order-preserving. Grant/revoke loop
+        this so single and bundle are the same code path (Open/Closed).
+        """
+        if self.package_kind == "bundle":
+            return _dedupe(
+                (entry["owner"], entry["repo"]) for entry in (self.bundle_repos or [])
+            )
+        return [(self.github_owner, self.github_repo)]
 
     def to_dict(self) -> dict:
         return {
@@ -90,6 +123,8 @@ class GhrmSoftwarePackage(BaseModel):
             "is_active": self.is_active,
             "sort_order": self.sort_order,
             "collaborator_permission": self.collaborator_permission,
+            "package_kind": self.package_kind,
+            "bundle_repos": self.bundle_repos,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

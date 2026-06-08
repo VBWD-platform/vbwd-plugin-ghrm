@@ -77,6 +77,11 @@ def _make_package(pkg_id="pkg-1", slug="my-pkg", owner="acme", repo="my-repo"):
     pkg.github_owner = owner
     pkg.github_repo = repo
     pkg.collaborator_permission = "pull"
+    pkg.package_kind = "single"
+    pkg.bundle_repos = []
+    # Honour the S59 repo_targets() seam so single packages resolve to their one
+    # representative repo (the fake obeys the production contract — Liskov).
+    pkg.repo_targets.return_value = [(owner, repo)]
     return pkg
 
 
@@ -518,9 +523,11 @@ class TestRevokeExpiredGraceAccess:
         membership.package_id = pkg.id
         membership.status = MembershipStatus.ACTIVE.value
         membership.invitation_id = None
+        membership.repo_grants = []  # legacy row -> representative-repo fallback
         membership.package = pkg
         membership_repo = MagicMock()
         membership_repo.find_grace_expired.return_value = [membership]
+        membership_repo.find_by_user.return_value = [membership]
 
         package_repo = MagicMock()
         package_repo.find_by_id.return_value = pkg
@@ -555,9 +562,11 @@ class TestRevokeExpiredGraceAccess:
         membership.package_id = pkg.id
         membership.status = MembershipStatus.INVITED.value
         membership.invitation_id = "inv-9"
+        membership.repo_grants = []  # legacy row -> representative-repo fallback
         membership.package = pkg
         membership_repo = MagicMock()
         membership_repo.find_grace_expired.return_value = [membership]
+        membership_repo.find_by_user.return_value = [membership]
 
         package_repo = MagicMock()
         package_repo.find_by_id.return_value = pkg
@@ -666,6 +675,7 @@ class TestDisconnectGithub:
         membership.package_id = pkg.id
         membership.status = MembershipStatus.ACTIVE.value
         membership.invitation_id = None
+        membership.repo_grants = []  # legacy row -> representative-repo fallback
         membership.package = pkg
         membership_repo = MagicMock()
         membership_repo.find_by_user.return_value = [membership]
@@ -713,6 +723,7 @@ class TestDisconnectGithub:
         membership.package_id = pkg.id
         membership.status = MembershipStatus.ACTIVE.value
         membership.invitation_id = None
+        membership.repo_grants = []  # legacy row -> representative-repo fallback
         membership.package = pkg
         membership_repo = MagicMock()
         membership_repo.find_by_user.return_value = [membership]

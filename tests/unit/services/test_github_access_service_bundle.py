@@ -241,10 +241,18 @@ class TestBundleRevoke:
         membership = self._bundle_membership(
             pkg,
             repo_grants=[
-                {"owner": "acme", "repo": "alpha", "status": "active",
-                 "invitation_id": None},
-                {"owner": "acme", "repo": "beta", "status": "active",
-                 "invitation_id": None},
+                {
+                    "owner": "acme",
+                    "repo": "alpha",
+                    "status": "active",
+                    "invitation_id": None,
+                },
+                {
+                    "owner": "acme",
+                    "repo": "beta",
+                    "status": "active",
+                    "invitation_id": None,
+                },
             ],
             status=MembershipStatus.ACTIVE.value,
         )
@@ -291,10 +299,18 @@ class TestBundleRevoke:
         expiring = self._bundle_membership(
             bundle_pkg,
             repo_grants=[
-                {"owner": "acme", "repo": "shared", "status": "active",
-                 "invitation_id": None},
-                {"owner": "acme", "repo": "alpha", "status": "active",
-                 "invitation_id": None},
+                {
+                    "owner": "acme",
+                    "repo": "shared",
+                    "status": "active",
+                    "invitation_id": None,
+                },
+                {
+                    "owner": "acme",
+                    "repo": "alpha",
+                    "status": "active",
+                    "invitation_id": None,
+                },
             ],
             status=MembershipStatus.ACTIVE.value,
         )
@@ -362,10 +378,18 @@ class TestBundleRevoke:
         membership = self._bundle_membership(
             pkg,
             repo_grants=[
-                {"owner": "acme", "repo": "alpha", "status": "invited",
-                 "invitation_id": "555"},
-                {"owner": "acme", "repo": "beta", "status": "active",
-                 "invitation_id": None},
+                {
+                    "owner": "acme",
+                    "repo": "alpha",
+                    "status": "invited",
+                    "invitation_id": "555",
+                },
+                {
+                    "owner": "acme",
+                    "repo": "beta",
+                    "status": "active",
+                    "invitation_id": None,
+                },
             ],
             status=MembershipStatus.GRACE.value,
         )

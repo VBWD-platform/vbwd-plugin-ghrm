@@ -58,6 +58,8 @@ from plugins.ghrm.src.services.software_package_service import (
     GhrmNotConfiguredError,
     GhrmValidationError,
     validate_collaborator_permission,
+    validate_package_kind,
+    validate_bundle_repos,
 )
 from plugins.ghrm.src.services.github_access_service import (
     GithubAccessService,
@@ -589,6 +591,10 @@ def admin_create_package():
         collaborator_permission = validate_collaborator_permission(
             body.get("collaborator_permission"), allow_extensive=allow_extensive
         )
+        package_kind = validate_package_kind(body.get("package_kind"))
+        bundle_repos = validate_bundle_repos(
+            body.get("bundle_repos"), kind=package_kind
+        )
     except GhrmValidationError as exc:
         return jsonify({"error": str(exc)}), 400
     pkg = GhrmSoftwarePackage(
@@ -605,6 +611,8 @@ def admin_create_package():
         related_slugs=body.get("related_slugs", []),
         sort_order=body.get("sort_order", 0),
         collaborator_permission=collaborator_permission,
+        package_kind=package_kind,
+        bundle_repos=bundle_repos,
     )
     repo.save(pkg)
     return jsonify(pkg.to_dict()), 201
@@ -641,6 +649,19 @@ def admin_update_package(pkg_id):
         try:
             pkg.collaborator_permission = validate_collaborator_permission(
                 body["collaborator_permission"], allow_extensive=allow_extensive
+            )
+        except GhrmValidationError as exc:
+            return jsonify({"error": str(exc)}), 400
+    # S59: package_kind + bundle_repos. The effective kind is the body value
+    # when supplied, else the package's current kind; switching to single clears
+    # bundle_repos. Validate both whenever either is touched.
+    if "package_kind" in body or "bundle_repos" in body:
+        try:
+            if "package_kind" in body:
+                pkg.package_kind = validate_package_kind(body["package_kind"])
+            pkg.bundle_repos = validate_bundle_repos(
+                body["bundle_repos"] if "bundle_repos" in body else pkg.bundle_repos,
+                kind=pkg.package_kind,
             )
         except GhrmValidationError as exc:
             return jsonify({"error": str(exc)}), 400

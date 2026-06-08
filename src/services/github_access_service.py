@@ -278,91 +278,200 @@ class GithubAccessService:
         access: GhrmUserGithubAccess,
         triggered_by: str,
     ) -> None:
-        """Single home for grant: add collaborator + upsert membership (DRY).
+        """Single home for grant: add collaborator on every repo the package
+        resolves to (``repo_targets()`` — single or bundle) + upsert one
+        membership with per-repo ``repo_grants`` and a rolled-up row status (DRY).
 
-        Only ``GithubAppClientError`` is caught — it is recorded as an ERROR
-        membership and a warning is logged. Any other exception propagates.
+        Per-repo ``GithubAppClientError`` is recorded in that repo's entry and
+        in ``last_error`` but never aborts the loop (best-effort). Any other
+        exception propagates. The rollup is ACTIVE when every repo is active,
+        else INVITED when any repo is pending, else ERROR.
         """
-        try:
-            result = self._github.add_collaborator(
-                package.github_owner,
-                package.github_repo,
-                access.github_username,
-                resolve_effective_permission(
-                    package, self._allow_extensive_permissions
-                ),
-            )
-            status = (
-                MembershipStatus.ACTIVE.value
-                if result.state == "active"
-                else MembershipStatus.INVITED.value
-            )
-            self._membership_repo.upsert(
-                user_id,
-                package.id,
-                status=status,
-                invitation_id=result.invitation_id,
-                invited_at=utcnow(),
-                last_error=None,
-            )
+        permission = resolve_effective_permission(
+            package, self._allow_extensive_permissions
+        )
+        repo_grants: list = []
+        last_error: Optional[str] = None
+        for owner, repo in package.repo_targets():
+            try:
+                result = self._github.add_collaborator(
+                    owner, repo, access.github_username, permission
+                )
+                repo_status = (
+                    MembershipStatus.ACTIVE.value
+                    if result.state == "active"
+                    else MembershipStatus.INVITED.value
+                )
+                repo_grants.append(
+                    {
+                        "owner": owner,
+                        "repo": repo,
+                        "status": repo_status,
+                        "invitation_id": result.invitation_id,
+                    }
+                )
+            except GithubAppClientError as exc:
+                last_error = str(exc)
+                repo_grants.append(
+                    {
+                        "owner": owner,
+                        "repo": repo,
+                        "status": MembershipStatus.ERROR.value,
+                        "invitation_id": None,
+                    }
+                )
+                logger.warning(
+                    "[GHRM] add_collaborator failed for %s/%s: %s",
+                    owner,
+                    repo,
+                    exc,
+                )
+
+        rolled_up_status = self._roll_up_status(repo_grants)
+        representative_invitation_id = self._representative_invitation_id(
+            package, repo_grants
+        )
+        self._membership_repo.upsert(
+            user_id,
+            package.id,
+            status=rolled_up_status,
+            invitation_id=representative_invitation_id,
+            invited_at=utcnow(),
+            last_error=last_error,
+            repo_grants=repo_grants,
+        )
+        if rolled_up_status != MembershipStatus.ERROR.value:
             self._log_repo.log(
                 user_id, str(package.id), SyncAction.ADD_COLLABORATOR, triggered_by
             )
-        except GithubAppClientError as exc:
-            self._membership_repo.upsert(
-                user_id,
-                package.id,
-                status=MembershipStatus.ERROR.value,
-                last_error=str(exc),
-            )
-            logger.warning(
-                "[GHRM] add_collaborator failed for %s/%s: %s",
-                package.github_owner,
-                package.github_repo,
-                exc,
-            )
+
+    @staticmethod
+    def _roll_up_status(repo_grants: list) -> str:
+        """ACTIVE if every repo active, else INVITED if any pending, else ERROR."""
+        statuses = {grant["status"] for grant in repo_grants}
+        if statuses == {MembershipStatus.ACTIVE.value}:
+            return MembershipStatus.ACTIVE.value
+        if MembershipStatus.INVITED.value in statuses:
+            return MembershipStatus.INVITED.value
+        if MembershipStatus.ACTIVE.value in statuses:
+            # Mix of active + error (no pending) — still partially granted.
+            return MembershipStatus.ACTIVE.value
+        return MembershipStatus.ERROR.value
+
+    @staticmethod
+    def _representative_invitation_id(package: Any, repo_grants: list) -> Optional[str]:
+        """The representative repo's invitation id (display + back-compat)."""
+        representative = (package.github_owner, package.github_repo)
+        for grant in repo_grants:
+            if (grant["owner"], grant["repo"]) == representative:
+                return grant.get("invitation_id")
+        return repo_grants[0].get("invitation_id") if repo_grants else None
 
     def _tear_down_membership(
         self, access: GhrmUserGithubAccess, membership: Any, triggered_by: str
     ) -> None:
-        """Remove a collaborator or cancel a pending invitation for a membership.
+        """Remove collaborator / cancel invite for every repo a membership grants.
 
-        Best-effort: a GitHub-side failure (e.g. the App lacks permission to
-        remove a collaborator → 403 "Resource not accessible by integration")
-        is logged and swallowed so the user's disconnect always completes. The
-        local access record + memberships are still deleted; only the
-        GitHub-side removal is skipped. Mirrors the add path's handling.
+        Loops the membership's recorded ``repo_grants`` (falling back to the
+        package's representative repo for legacy/empty rows). A repo still
+        covered by another live (ACTIVE/INVITED/GRACE) membership is SKIPPED
+        (D6 — no over-revoke). For each remaining repo an INVITED grant with an
+        invitation id is ``cancel_invitation``-d, otherwise ``remove_collaborator``.
+
+        Best-effort: a GitHub-side failure (e.g. the App lacks permission → 403)
+        is logged and swallowed so the user's disconnect always completes.
         """
         package = self._resolve_package(membership)
         if not package:
             return
-        try:
-            if (
-                membership.status == MembershipStatus.INVITED.value
-                and membership.invitation_id
-            ):
-                self._github.cancel_invitation(
-                    package.github_owner, package.github_repo, membership.invitation_id
+        still_entitled = self._repos_still_entitled(
+            str(membership.user_id), excluding=membership
+        )
+        for owner, repo, status, invitation_id in self._tear_down_targets(
+            membership, package
+        ):
+            if (owner, repo) in still_entitled:
+                continue
+            try:
+                if status == MembershipStatus.INVITED.value and invitation_id:
+                    self._github.cancel_invitation(owner, repo, invitation_id)
+                else:
+                    self._github.remove_collaborator(
+                        owner, repo, access.github_username
+                    )
+            except GithubAppClientError as exc:
+                logger.warning(
+                    "[GHRM] tear-down (remove collaborator / cancel invite) failed "
+                    "for %s/%s: %s — continuing disconnect",
+                    owner,
+                    repo,
+                    exc,
                 )
-            else:
-                self._github.remove_collaborator(
-                    package.github_owner, package.github_repo, access.github_username
+                continue
+            self._log_repo.log(
+                str(membership.user_id),
+                str(membership.package_id),
+                SyncAction.REMOVE_COLLABORATOR,
+                triggered_by,
+            )
+
+    @staticmethod
+    def _tear_down_targets(membership: Any, package: Any) -> list:
+        """Per-repo ``(owner, repo, status, invitation_id)`` tuples to tear down.
+
+        Prefers the membership's recorded ``repo_grants``; falls back to the
+        package's representative repo (with the row-level status/invitation) for
+        legacy rows that predate ``repo_grants``.
+        """
+        repo_grants = getattr(membership, "repo_grants", None) or []
+        if repo_grants:
+            return [
+                (
+                    grant["owner"],
+                    grant["repo"],
+                    grant.get("status"),
+                    grant.get("invitation_id"),
                 )
-        except GithubAppClientError as exc:
-            logger.warning(
-                "[GHRM] tear-down (remove collaborator / cancel invite) failed "
-                "for %s/%s: %s — continuing disconnect",
+                for grant in repo_grants
+            ]
+        return [
+            (
                 package.github_owner,
                 package.github_repo,
-                exc,
+                membership.status,
+                membership.invitation_id,
             )
-            return
-        self._log_repo.log(
-            str(membership.user_id),
-            str(membership.package_id),
-            SyncAction.REMOVE_COLLABORATOR,
-            triggered_by,
-        )
+        ]
+
+    _LIVE_STATUSES = (
+        MembershipStatus.ACTIVE.value,
+        MembershipStatus.INVITED.value,
+        MembershipStatus.GRACE.value,
+    )
+
+    def _repos_still_entitled(self, user_id: str, *, excluding: Any) -> set:
+        """Repos the user is still entitled to via OTHER live memberships (D6).
+
+        Pure read: the union of ``repo_targets()`` over the user's other
+        memberships in {ACTIVE, INVITED, GRACE}. No GitHub calls.
+        """
+        excluded_id = getattr(excluding, "id", None)
+        still_entitled: set = set()
+        for membership in self._membership_repo.find_by_user(user_id):
+            if (
+                excluded_id is not None
+                and getattr(membership, "id", None) == excluded_id
+            ):
+                continue
+            if membership is excluding:
+                continue
+            if membership.status not in self._LIVE_STATUSES:
+                continue
+            package = self._resolve_package(membership)
+            if not package:
+                continue
+            still_entitled.update(package.repo_targets())
+        return still_entitled
 
     def _resolve_package(self, membership: Any) -> Optional[Any]:
         """Return the membership's package, preferring the eager relationship."""

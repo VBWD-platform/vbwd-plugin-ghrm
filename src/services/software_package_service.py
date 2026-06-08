@@ -8,6 +8,8 @@ from plugins.ghrm.src.models.ghrm_software_package import (
     GhrmSoftwarePackage,
     ALLOWED_COLLABORATOR_PERMISSIONS,
     DEFAULT_COLLABORATOR_PERMISSION,
+    ALLOWED_PACKAGE_KINDS,
+    DEFAULT_PACKAGE_KIND,
 )
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync
 from plugins.ghrm.src.repositories.software_package_repository import (
@@ -68,6 +70,60 @@ def validate_collaborator_permission(
             "to grant Write, Maintain or Admin access."
         )
     return value
+
+
+def validate_package_kind(value: Optional[str]) -> str:
+    """Validate and normalise a package's kind (S59).
+
+    Returns the default ``"single"`` when omitted (``None``); raises
+    :class:`GhrmValidationError` for anything outside
+    :data:`ALLOWED_PACKAGE_KINDS`. Single validation home reused by create and
+    update.
+    """
+    if value is None:
+        return DEFAULT_PACKAGE_KIND
+    if value not in ALLOWED_PACKAGE_KINDS:
+        allowed = ", ".join(ALLOWED_PACKAGE_KINDS)
+        raise GhrmValidationError(
+            f"Invalid package_kind '{value}'. Must be one of: {allowed}"
+        )
+    return value
+
+
+def validate_bundle_repos(value: Any, *, kind: str) -> List[Dict[str, str]]:
+    """Validate and normalise a package's curated bundle repo list (S59, D2).
+
+    For ``kind == "single"`` the list is forced to ``[]`` regardless of input.
+    For ``kind == "bundle"`` the list must be non-empty; each entry must carry a
+    non-blank ``owner`` and ``repo`` (trimmed); duplicates are deduped while
+    preserving first-seen order. Raises :class:`GhrmValidationError` otherwise.
+    """
+    if kind != "bundle":
+        return []
+    if not isinstance(value, list) or not value:
+        raise GhrmValidationError(
+            "A bundle package requires a non-empty bundle_repos list of "
+            "{owner, repo} entries."
+        )
+    deduped: List[Dict[str, str]] = []
+    seen: set = set()
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise GhrmValidationError(
+                "Each bundle_repos entry must be a {owner, repo} object."
+            )
+        owner = str(entry.get("owner", "")).strip()
+        repo = str(entry.get("repo", "")).strip()
+        if not owner or not repo:
+            raise GhrmValidationError(
+                "Each bundle_repos entry must have a non-blank owner and repo."
+            )
+        pair = (owner, repo)
+        if pair in seen:
+            continue
+        seen.add(pair)
+        deduped.append({"owner": owner, "repo": repo})
+    return deduped
 
 
 class SoftwarePackageService:

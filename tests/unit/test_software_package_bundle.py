@@ -30,12 +30,14 @@ class TestPackageKind:
     def test_column_default_is_single(self):
         column = GhrmSoftwarePackage.__table__.columns["package_kind"]
         assert column.default.arg == "single"
-        assert column.server_default.arg == "single"
+        assert str(column.server_default.arg) == "single"
         assert column.nullable is False
 
     def test_bundle_repos_column_defaults_to_empty_list(self):
         column = GhrmSoftwarePackage.__table__.columns["bundle_repos"]
-        assert column.default.arg is list
+        assert column.default.is_callable
+        assert column.default.arg(None) == []  # CallableColumnDefault(list)
+        assert str(column.server_default.arg) == "[]"
         assert column.nullable is False
 
 

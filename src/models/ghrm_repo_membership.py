@@ -52,6 +52,10 @@ class GhrmRepoMembership(BaseModel):
     invited_at = db.Column(db.DateTime, nullable=True)
     grace_expires_at = db.Column(db.DateTime, nullable=True)
     last_error = db.Column(db.Text, nullable=True)
+    # S59: per-repo invite/grant for a bundle package
+    # ``[{"owner","repo","status","invitation_id"}]``. Row-level
+    # ``status``/``invitation_id`` stay the representative-repo rollup.
+    repo_grants = db.Column(db.JSON, nullable=False, default=list, server_default="[]")
 
     package = db.relationship(GhrmSoftwarePackage, lazy="joined")
 
@@ -75,6 +79,7 @@ class GhrmRepoMembership(BaseModel):
             if self.grace_expires_at
             else None,
             "last_error": self.last_error,
+            "repo_grants": self.repo_grants or [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
