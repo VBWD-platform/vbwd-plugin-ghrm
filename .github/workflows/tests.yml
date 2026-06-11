@@ -71,14 +71,20 @@ jobs:
         run: docker compose up -d --build
 
       # ── 5. Install and activate plugin ────────────────────────────────────
-      - name: Enable plugin
+      - name: Enable all present plugins
         working-directory: vbwd-backend
         run: |
-          docker compose exec -T api flask plugins enable ghrm \
-            && echo "Plugin ghrm enabled." \
-            || echo "Plugin ghrm already enabled or not registerable — continuing."
-
-      # ── 6. Unit tests ──────────────────────────────────────────────────────
+          EXCLUDE_FILE="ci/plugins-enable-exclude.txt"
+          for d in plugins/*/; do
+            name=$(basename "$d")
+            [ -f "${d}__init__.py" ] || continue
+            if [ -f "$EXCLUDE_FILE" ] && grep -qxF "$name" "$EXCLUDE_FILE"; then
+              echo "Skipping CI-excluded plugin: $name"; continue
+            fi
+            docker compose exec -T api flask --app "vbwd:create_app()" plugins enable "$name" \
+              && echo "Plugin $name enabled." \
+              || echo "Plugin $name already enabled or not registerable — continuing."
+          done
       - name: Run unit tests
         working-directory: vbwd-backend
         run: |
