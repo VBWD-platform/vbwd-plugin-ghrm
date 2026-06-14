@@ -52,6 +52,20 @@ def app():
     from vbwd.extensions import limiter
 
     limiter.reset()
+
+    # Build the full schema exactly ONCE for the whole session, resetting the
+    # public schema first (clearing any table or ENUM type left by a prior
+    # crashed run or a sibling suite sharing this ``*_test`` DB). A per-test
+    # create_all()/drop_all() strands standalone PG ENUM types and races other
+    # suites on the shared catalog — see vbwd/testing/integration_db.py.
+    # create_app() has already registered every enabled plugin's models, so
+    # create_all() emits the full table set. Each test isolates by TRUNCATE.
+    with app.app_context():
+        from vbwd.extensions import db as _db
+        from vbwd.testing.integration_db import reset_schema_and_create_all
+
+        reset_schema_and_create_all(_db)
+
     yield app
 
 
@@ -65,7 +79,8 @@ def db(app):
     from vbwd.extensions import db
 
     with app.app_context():
-        db.create_all()
+        from vbwd.testing.integration_db import truncate_all_tables
+
+        truncate_all_tables(db)
         yield db
         db.session.remove()
-        db.drop_all()

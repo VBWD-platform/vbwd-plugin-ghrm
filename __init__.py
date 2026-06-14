@@ -111,6 +111,29 @@ class GhrmPlugin(BasePlugin):
     def on_enable(self) -> None:
         self._register_data_exchangers()
 
+        # S88 — contribute the GHRM catalog seed to ``flask reset-demo`` through
+        # the agnostic demo-data registry (core imports no ghrm model).
+        from vbwd.services.demo_data_registry import register_catalog_seeder
+        from plugins.ghrm.src.bin.populate_ghrm import seed_catalog
+
+        register_catalog_seeder(seed_catalog)
+
+        # S77 — register ghrm_software_package as taggable/custom-field-able so
+        # the core value endpoints resolve it (gated by ghrm.packages.manage)
+        # and the package serializer can append tags / custom fields.
+        from vbwd.services.entity_type_registry import (
+            EntityTypeRegistration,
+            register_entity_type,
+        )
+
+        register_entity_type(
+            EntityTypeRegistration(
+                "ghrm_software_package",
+                "Software package",
+                "ghrm.packages.manage",
+            )
+        )
+
     def _make_access_service(self):
         """Composition root for GithubAccessService.
 
@@ -208,4 +231,6 @@ class GhrmPlugin(BasePlugin):
             pass  # Plugin disabled or dependencies not ready
 
     def on_disable(self) -> None:
-        pass
+        from vbwd.services.entity_type_registry import unregister_entity_type
+
+        unregister_entity_type("ghrm_software_package")

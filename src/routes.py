@@ -301,6 +301,23 @@ def get_package(slug):
     """Get package detail with merged cached/override data."""
     try:
         data = _pkg_svc().get_package(slug)
+
+        # S77 — append the generic tags / custom fields (opt-in, no model
+        # import). The package card / detail reads these keys + the field defs
+        # off the payload without an extra round trip.
+        from uuid import UUID
+
+        from vbwd.services.tags_and_custom_fields import (
+            append_tags_and_custom_fields,
+            resolve_tags_and_custom_fields,
+        )
+
+        append_tags_and_custom_fields(
+            data, "ghrm_software_package", UUID(str(data["id"]))
+        )
+        data["custom_field_defs"] = resolve_tags_and_custom_fields().get_field_defs(
+            "ghrm_software_package"
+        )
         return jsonify(data)
     except GhrmPackageNotFoundError as e:
         return jsonify({"error": str(e)}), 404

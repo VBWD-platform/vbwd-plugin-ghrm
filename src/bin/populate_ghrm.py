@@ -24,7 +24,6 @@ from plugins.subscription.subscription.models.tarif_plan import (  # noqa: E402
 from plugins.subscription.subscription.models.tarif_plan_category import (  # noqa: E402
     TarifPlanCategory,
 )
-from vbwd.models.price import Price  # noqa: E402
 from vbwd.models.enums import BillingPeriod  # noqa: E402
 from vbwd.models.currency import Currency  # noqa: E402
 from plugins.ghrm.src.models.ghrm_software_package import (  # noqa: E402
@@ -76,10 +75,6 @@ def get_or_create(session, model, slug: str, **kwargs):
     session.flush()
     return obj, True
 
-
-# ── Main ─────────────────────────────────────────────────────────────────────
-
-session = Session()
 
 # ── Software package definitions ──────────────────────────────────────────────
 #
@@ -358,34 +353,21 @@ def _get_or_create_plan(session, slug, name):
         return plan, False
     eur = session.query(Currency).filter_by(code="EUR").first()
     if not eur:
+        # S84: active set + default live in the core settings JSON, not on
+        # the dropped ``is_active``/``is_default`` columns.
         eur = Currency(
             code="EUR",
             name="Euro",
             symbol="€",
             exchange_rate=Decimal("1.0"),
-            is_default=True,
-            is_active=True,
         )
         session.add(eur)
         session.flush()
-    price_obj = Price(
-        price_float=0.0,
-        price_decimal=Decimal("0.00"),
-        currency_id=eur.id,
-        net_amount=Decimal("0.00"),
-        gross_amount=Decimal("0.00"),
-        taxes={},
-    )
-    session.add(price_obj)
-    session.flush()
     plan = TarifPlan(
         name=name,
         slug=slug,
         description="",
-        price_float=0.0,
-        price_id=price_obj.id,
-        price=Decimal("0.00"),
-        currency="EUR",
+        price=0.0,
         billing_period=BillingPeriod.YEARLY,
         trial_days=0,
         features={},
@@ -397,7 +379,14 @@ def _get_or_create_plan(session, slug, name):
     return plan, True
 
 
-try:
+def seed_catalog(session) -> dict:
+    """Seed GHRM software packages, sync demo content, and CMS catalogue/detail
+    layouts, widgets and pages through ``session`` (S88).
+
+    The single home for the GHRM seed logic — registered into core's demo-data
+    registry from the plugin's ``on_enable`` so ``flask reset-demo`` runs it, and
+    invoked by the standalone ``__main__`` wrapper below. Idempotent.
+    """
     # ── Software Packages ────────────────────────────────────────────────────
 
     print("\n=== Software Packages ===")
@@ -825,11 +814,29 @@ try:
         "\n  Assign a CMS Style to a template page in the admin to override catalogue styles."
     )
 
-except Exception:
-    session.rollback()
-    import traceback
+    return {
+        "ghrm_packages": session.query(GhrmSoftwarePackage).count(),
+    }
 
-    traceback.print_exc()
-    sys.exit(1)
-finally:
-    session.close()
+
+def _run_standalone() -> None:
+    """Standalone entrypoint: run ``seed_catalog`` on its own session.
+
+    Thin wrapper over the shared ``seed_catalog`` (DRY) — ``flask reset-demo``
+    calls ``seed_catalog`` directly through the demo-data registry.
+    """
+    standalone_session = Session()
+    try:
+        seed_catalog(standalone_session)
+    except Exception:
+        standalone_session.rollback()
+        import traceback
+
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        standalone_session.close()
+
+
+if __name__ == "__main__":
+    _run_standalone()
