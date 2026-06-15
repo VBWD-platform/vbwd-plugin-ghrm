@@ -35,6 +35,31 @@ def _ensure_test_db(url: str) -> None:
         engine.dispose()
 
 
+def _ensure_ghrm_enabled(flask_app) -> None:
+    """Enable ghrm (+ its ``subscription`` dep) so ``on_enable`` runs and
+    registers the ghrm package entity-type / repos.
+
+    A fresh per-plugin CI clone has no ``plugins.json``, so ghrm is otherwise
+    discovered-but-not-enabled and the entity-type / tags tests see nothing.
+    Idempotent — a no-op when already enabled (e.g. local dev state).
+    """
+    from vbwd.plugins.base import PluginStatus
+
+    manager = getattr(flask_app, "plugin_manager", None)
+    if manager is None:
+        return
+    with flask_app.app_context():
+        for name in ("subscription", "ghrm"):  # dependency first
+            plugin = manager.get_plugin(name)
+            if plugin is None or plugin.status == PluginStatus.ENABLED:
+                continue
+            try:
+                manager.enable_plugin(name)
+            except ValueError:
+                if plugin.status == PluginStatus.INITIALIZED:
+                    plugin.enable()
+
+
 @pytest.fixture(scope="session")
 def app():
     from vbwd.app import create_app
@@ -63,6 +88,8 @@ def app():
         from vbwd.testing.integration_db import ensure_schema_and_baseline
 
         ensure_schema_and_baseline(_db)
+
+    _ensure_ghrm_enabled(app)
 
     yield app
 
