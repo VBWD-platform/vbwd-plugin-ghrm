@@ -113,10 +113,24 @@ class GhrmPlugin(BasePlugin):
 
         # S88 — contribute the GHRM catalog seed to ``flask reset-demo`` through
         # the agnostic demo-data registry (core imports no ghrm model).
-        from vbwd.services.demo_data_registry import register_catalog_seeder
-        from plugins.ghrm.src.bin.populate_ghrm import seed_catalog
+        # The seed module imports cms models (it seeds the software-catalogue
+        # CMS pages), so cms is a SOFT dependency: when cms is absent the demo
+        # seeder simply isn't registered — ghrm still enables and its entity
+        # type below is still registered (a missing optional dep must not abort
+        # on_enable). Mirrors meinchat's soft-cms posture.
+        import logging
 
-        register_catalog_seeder(seed_catalog)
+        from vbwd.services.demo_data_registry import register_catalog_seeder
+
+        try:
+            from plugins.ghrm.src.bin.populate_ghrm import seed_catalog
+
+            register_catalog_seeder(seed_catalog)
+        except ImportError as seed_import_error:
+            logging.getLogger(__name__).warning(
+                "[ghrm] Demo catalog seeder not registered (cms absent?): %s",
+                seed_import_error,
+            )
 
         # S77 — register ghrm_software_package as taggable/custom-field-able so
         # the core value endpoints resolve it (gated by ghrm.packages.manage)
