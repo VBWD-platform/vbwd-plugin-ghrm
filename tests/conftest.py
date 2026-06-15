@@ -53,18 +53,16 @@ def app():
 
     limiter.reset()
 
-    # Build the full schema exactly ONCE for the whole session, resetting the
-    # public schema first (clearing any table or ENUM type left by a prior
-    # crashed run or a sibling suite sharing this ``*_test`` DB). A per-test
-    # create_all()/drop_all() strands standalone PG ENUM types and races other
-    # suites on the shared catalog — see vbwd/testing/integration_db.py.
-    # create_app() has already registered every enabled plugin's models, so
-    # create_all() emits the full table set. Each test isolates by TRUNCATE.
+    # Build the schema once per process (create_all, checkfirst — never drops,
+    # so it cannot wipe data) and commit baseline reference rows once. Each test
+    # then isolates itself via a rolled-back transaction (no TRUNCATE, no DROP) —
+    # see vbwd/testing/integration_db.py. create_app() has already registered
+    # every enabled plugin's models, so create_all() emits the full table set.
     with app.app_context():
         from vbwd.extensions import db as _db
-        from vbwd.testing.integration_db import reset_schema_and_create_all
+        from vbwd.testing.integration_db import ensure_schema_and_baseline
 
-        reset_schema_and_create_all(_db)
+        ensure_schema_and_baseline(_db)
 
     yield app
 
@@ -76,11 +74,16 @@ def client(app):
 
 @pytest.fixture
 def db(app):
+    """Isolate each test in a rolled-back transaction (self-cleaning, no wipe).
+
+    The schema + baseline reference rows are built once in the ``app`` fixture;
+    each test runs inside a transaction that is rolled back at teardown, so
+    nothing it writes persists. See vbwd/testing/integration_db.py.
+    """
     from vbwd.extensions import db
 
     with app.app_context():
-        from vbwd.testing.integration_db import truncate_all_tables
+        from vbwd.testing.integration_db import rollback_isolation
 
-        truncate_all_tables(db)
-        yield db
-        db.session.remove()
+        with rollback_isolation(db):
+            yield db

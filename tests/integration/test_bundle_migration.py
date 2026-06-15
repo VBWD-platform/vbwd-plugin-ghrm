@@ -65,7 +65,7 @@ def _make_plan(db, name: str) -> TarifPlan:
     plan = TarifPlan(
         name=name,
         slug=f"plan-{uuid4().hex[:8]}",
-        price_float=10.0,
+        price=10.0,
         billing_period=BillingPeriod.MONTHLY,
     )
     db.session.add(plan)
@@ -74,10 +74,17 @@ def _make_plan(db, name: str) -> TarifPlan:
 
 
 @pytest.fixture
-def migration_connection(db):
+def migration_connection(app):
     """Recreate the pre-migration schema so the additive migration is exercised
     in isolation: drop the new columns and (re-)add the dropped unique constraint.
+
+    Depends on ``app`` (schema built once), not ``db`` — this fixture opens its
+    OWN connection + transaction and rolls back at teardown, so it self-cleans
+    without the rolled-back-session isolation (which would swap ``db.engine`` for
+    a Connection and break ``db.engine.connect()`` below).
     """
+    from vbwd.extensions import db
+
     connection = db.engine.connect()
     transaction = connection.begin()
     operations = Operations(MigrationContext.configure(connection))
@@ -120,7 +127,7 @@ class TestBundleMigration:
         plan_id = uuid4()
         migration_connection.execute(
             text(
-                "INSERT INTO subscription_tarif_plan (id, name, slug, price_float, "
+                "INSERT INTO subscription_tarif_plan (id, name, slug, price, "
                 "billing_period, trial_days, is_active, created_at, updated_at, "
                 "version) VALUES "
                 "(:id, 'Legacy', :slug, 0, 'MONTHLY', 0, true, now(), now(), 1)"
@@ -160,7 +167,7 @@ class TestBundleMigration:
         user_id = uuid4()
         migration_connection.execute(
             text(
-                "INSERT INTO subscription_tarif_plan (id, name, slug, price_float, "
+                "INSERT INTO subscription_tarif_plan (id, name, slug, price, "
                 "billing_period, trial_days, is_active, created_at, updated_at, "
                 "version) VALUES "
                 "(:id, 'Legacy', :slug, 0, 'MONTHLY', 0, true, now(), now(), 1)"

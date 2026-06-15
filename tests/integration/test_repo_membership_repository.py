@@ -39,7 +39,7 @@ def _make_plan(db, name: str) -> TarifPlan:
     plan = TarifPlan(
         name=name,
         slug=f"plan-{uuid4().hex[:8]}",
-        price_float=10.0,
+        price=10.0,
         billing_period=BillingPeriod.MONTHLY,
     )
     db.session.add(plan)

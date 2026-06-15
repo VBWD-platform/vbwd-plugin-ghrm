@@ -53,7 +53,13 @@ def _column_names(connection, table):
 
 
 @pytest.fixture
-def migration_connection(db):
+def migration_connection(app):
+    # Depend on ``app`` (schema built once), not ``db`` — this fixture opens its
+    # OWN connection + transaction and rolls back at teardown, so it self-cleans
+    # without the rolled-back-session isolation (which would swap ``db.engine``
+    # for a Connection and break ``db.engine.connect()`` below).
+    from vbwd.extensions import db
+
     connection = db.engine.connect()
     transaction = connection.begin()
     operations = Operations(MigrationContext.configure(connection))

@@ -35,7 +35,7 @@ def _seed_package(db):
     plan = TarifPlan(
         slug=f"plan-{uuid.uuid4().hex[:8]}",
         name="Plan",
-        price_float=9.0,
+        price=9.0,
         billing_period=BillingPeriod.MONTHLY,
     )
     db.session.add(plan)

@@ -40,7 +40,7 @@ def _seed_plan(db, slug):
     plan = TarifPlan(
         slug=slug,
         name="Plan",
-        price_float=9.0,
+        price=9.0,
         billing_period=BillingPeriod.MONTHLY,
     )
     db.session.add(plan)
