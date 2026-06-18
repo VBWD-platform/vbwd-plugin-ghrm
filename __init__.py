@@ -148,6 +148,14 @@ class GhrmPlugin(BasePlugin):
             )
         )
 
+        # Cross-entity search seam — contribute active software packages to the
+        # agnostic search registry so the /search bot can find them (idempotent:
+        # register replaces by entity_type). Core names no ghrm vocabulary.
+        from vbwd.services.search import search_provider_registry
+        from plugins.ghrm.src.search_provider import GhrmPackageSearchProvider
+
+        search_provider_registry.register(GhrmPackageSearchProvider())
+
     def _make_access_service(self):
         """Composition root for GithubAccessService.
 
@@ -248,3 +256,7 @@ class GhrmPlugin(BasePlugin):
         from vbwd.services.entity_type_registry import unregister_entity_type
 
         unregister_entity_type("ghrm_software_package")
+
+        from vbwd.services.search import search_provider_registry
+
+        search_provider_registry.unregister("ghrm_package")
