@@ -30,13 +30,13 @@ from plugins.ghrm.src.models.ghrm_software_package import (  # noqa: E402
     GhrmSoftwarePackage,
 )
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync  # noqa: E402
-from plugins.cms.src.models.cms_category import CmsCategory  # noqa: E402
+from plugins.cms.src.models.cms_term import CmsTerm  # noqa: E402
 from plugins.cms.src.models.cms_style import (  # noqa: E402, F401
     CmsStyle,
 )  # required for FK resolution
 from plugins.cms.src.models.cms_layout import CmsLayout  # noqa: E402
 from plugins.cms.src.models.cms_widget import CmsWidget  # noqa: E402
-from plugins.cms.src.models.cms_page import CmsPage  # noqa: E402
+from plugins.cms.src.models.cms_post import CmsPost  # noqa: E402
 from plugins.cms.src.models.cms_layout_widget import CmsLayoutWidget  # noqa: E402
 
 # ── Load plugin config to get category slugs ────────────────────────────────
@@ -509,8 +509,9 @@ def seed_catalog(session) -> dict:
     print("\n=== CMS Category ===")
     cms_cat, created = get_or_create(
         session,
-        CmsCategory,
+        CmsTerm,
         slug="ghrm",
+        term_type="category",
         name="Software Catalogue",
         sort_order=50,
     )
@@ -704,14 +705,14 @@ def seed_catalog(session) -> dict:
 
     tmpl_catalogue, created = get_or_create(
         session,
-        CmsPage,
+        CmsPost,
         slug=CATALOGUE_PAGE_SLUG,
-        name="GHRM Catalogue Template",
+        type="page",
+        title="GHRM Catalogue Template",
         language="en",
         content_json={"type": "doc", "content": []},
-        is_published=False,
+        status="draft",
         sort_order=0,
-        category_id=cms_cat.id,
         layout_id=layout_catalogue.id,
         meta_title="Software Catalogue",
         robots="noindex",
@@ -720,14 +721,14 @@ def seed_catalog(session) -> dict:
 
     tmpl_detail, created = get_or_create(
         session,
-        CmsPage,
+        CmsPost,
         slug=DETAIL_PAGE_SLUG,
-        name="GHRM Detail Template",
+        type="page",
+        title="GHRM Detail Template",
         language="en",
         content_json={"type": "doc", "content": []},
-        is_published=True,
+        status="published",
         sort_order=1,
-        category_id=cms_cat.id,
         layout_id=layout_detail.id,
         meta_title="Software Detail",
         robots="noindex",
@@ -743,14 +744,14 @@ def seed_catalog(session) -> dict:
     # /software — alternate root entry point with dark theme
     page_software, created = get_or_create(
         session,
-        CmsPage,
+        CmsPost,
         slug="software",
-        name="Software",
+        type="page",
+        title="Software",
         language="en",
         content_json={"type": "doc", "content": []},
-        is_published=True,
+        status="published",
         sort_order=0,
-        category_id=cms_cat.id,
         layout_id=layout_catalogue.id,
         style_id=style_dark.id if style_dark else None,
         meta_title="Software Catalogue",
@@ -762,14 +763,14 @@ def seed_catalog(session) -> dict:
     # Category index (root /category page)
     page_index, created = get_or_create(
         session,
-        CmsPage,
+        CmsPost,
         slug="category",
-        name="Software Catalogue",
+        type="page",
+        title="Software Catalogue",
         language="en",
         content_json={"type": "doc", "content": []},
-        is_published=True,
+        status="published",
         sort_order=0,
-        category_id=cms_cat.id,
         layout_id=layout_catalogue.id,
         style_id=style_light.id if style_light else None,
         meta_title="Software Catalogue",
@@ -784,14 +785,14 @@ def seed_catalog(session) -> dict:
         page_slug = f"category/{cat_slug}"
         page, created = get_or_create(
             session,
-            CmsPage,
+            CmsPost,
             slug=page_slug,
-            name=f"{label} Packages",
+            type="page",
+            title=f"{label} Packages",
             language="en",
             content_json={"type": "doc", "content": []},
-            is_published=True,
+            status="published",
             sort_order=i + 1,
-            category_id=cms_cat.id,
             layout_id=layout_catalogue.id,
             style_id=style_light.id if style_light else None,
             meta_title=f"{label} Packages",
