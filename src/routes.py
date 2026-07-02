@@ -19,6 +19,13 @@ GitHub OAuth (requires_auth):
 User profile (requires_auth):
     GET  /api/v1/ghrm/access                   current github access status
 
+Vendor self-service (requires_auth + marketplace.vendor, marketplace-mode gated):
+    POST   /api/v1/ghrm/vendor/packages              create a vendor package + plan
+    GET    /api/v1/ghrm/vendor/packages              list the caller's packages
+    GET    /api/v1/ghrm/vendor/packages/<id>         read one owned package
+    PUT    /api/v1/ghrm/vendor/packages/<id>         update an owned package + plan
+    DELETE /api/v1/ghrm/vendor/packages/<id>         delete an owned package + plan
+
 Admin (require_admin):
     GET    /api/v1/admin/ghrm/packages
     POST   /api/v1/admin/ghrm/packages
@@ -36,10 +43,19 @@ Admin (require_admin):
 import json
 import logging
 import os
+import re
 import secrets
+from decimal import Decimal, InvalidOperation
 from flask import Blueprint, jsonify, request, g, current_app
 from vbwd.extensions import db
-from vbwd.middleware.auth import require_auth, require_admin, require_permission
+from vbwd.middleware.auth import (
+    require_auth,
+    require_admin,
+    require_permission,
+    require_user_permission,
+)
+
+from plugins.ghrm.src.services.plugin_config import marketplace_enabled
 
 from plugins.ghrm.src.repositories.software_package_repository import (
     GhrmSoftwarePackageRepository,
@@ -558,6 +574,250 @@ def get_access_status():
     if not result:
         return jsonify({"connected": False}), 200
     return jsonify({**result, "connected": True})
+
+
+# ─── Vendor self-service (marketplace vendor-mode) ───────────────────────────
+
+# Billing periods a vendor may pick for a package's subscription plan. A subset
+# of the core BillingPeriod enum — vendors sell recurring (monthly/yearly) or a
+# one-off purchase; the exotic periods stay admin-only.
+_VENDOR_BILLING_PERIODS = ("MONTHLY", "YEARLY", "ONE_TIME")
+
+
+def _slugify(value: str) -> str:
+    """Lowercase, hyphenate a name into a URL slug (same rule as vendor plans)."""
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+
+@ghrm_bp.route("/api/v1/ghrm/vendor/packages", methods=["POST"])
+@require_auth
+@require_user_permission("marketplace.vendor")
+def vendor_create_package():
+    """Vendor self-service: sell a GHRM software package as a subscription.
+
+    Creates a vendor-owned subscription ``TarifPlan`` (``vendor_id`` = the
+    caller) and a ``GhrmSoftwarePackage`` linked to it. Because the plan carries
+    ``vendor_id``, subscription's existing checkout stamp attributes the sale to
+    the vendor automatically on purchase — GHRM adds no stamp of its own. Gated
+    behind the ``marketplace_enabled`` config flag (403 when off).
+    """
+    from plugins.subscription.subscription.cache_keys import invalidate_plan_cache
+    from plugins.subscription.subscription.models import TarifPlan
+    from plugins.subscription.subscription.repositories.tarif_plan_repository import (
+        TarifPlanRepository,
+    )
+
+    if not marketplace_enabled():
+        return jsonify({"error": "Vendor mode is not enabled"}), 403
+
+    body = request.get_json() or {}
+    required = ("name", "github_owner", "github_repo", "price")
+    missing = [field for field in required if body.get(field) in (None, "")]
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    billing_period = str(body.get("billing_period", "MONTHLY")).upper()
+    if billing_period not in _VENDOR_BILLING_PERIODS:
+        return (
+            jsonify(
+                {"error": f"billing_period must be one of {_VENDOR_BILLING_PERIODS}"}
+            ),
+            400,
+        )
+
+    try:
+        price = float(Decimal(str(body["price"])))
+    except (InvalidOperation, TypeError, ValueError):
+        return jsonify({"error": "Price is not a valid number"}), 400
+
+    slug = body.get("slug") or _slugify(body["name"])
+    if not slug:
+        return jsonify({"error": "A valid name or slug is required"}), 400
+
+    package_repo = GhrmSoftwarePackageRepository(db.session)
+    plan_repo = TarifPlanRepository(db.session)
+    if package_repo.find_by_slug(slug) or plan_repo.find_by_slug(slug):
+        return jsonify({"error": "Slug already exists"}), 409
+
+    plan = TarifPlan(
+        name=body["name"],
+        slug=slug,
+        description=body.get("description", ""),
+        price=price,
+        billing_period=billing_period,
+        is_active=True,
+        vendor_id=g.user_id,
+    )
+    saved_plan = plan_repo.save(plan)
+    invalidate_plan_cache()
+
+    package = GhrmSoftwarePackage(
+        tariff_plan_id=saved_plan.id,
+        name=body["name"],
+        slug=slug,
+        description=body.get("description"),
+        github_owner=body["github_owner"],
+        github_repo=body["github_repo"],
+        is_active=True,
+    )
+    package_repo.save(package)
+
+    return jsonify({"package": package.to_dict()}), 201
+
+
+def _vendor_package_dict(package, plan):
+    """Serialize a vendor package, enriching with the linked plan's price + id.
+
+    ``price`` lives on the subscription plan (not the package), so the package's
+    own ``to_dict()`` cannot carry it; we fold it in here alongside ``plan_id``
+    (an explicit alias of ``tariff_plan_id``) so the vendor UI has everything it
+    needs from one object.
+    """
+    data = package.to_dict()
+    data["price"] = plan.raw_price if plan is not None else None
+    data["plan_id"] = str(plan.id) if plan is not None else None
+    return data
+
+
+def _load_owned_vendor_package(package_id):
+    """Return ``(package, plan, None)`` when the caller owns ``package_id``.
+
+    Ownership is expressed by the linked plan's ``vendor_id`` matching the
+    caller (mirrors ``vendor_create_package``, which stamps ``vendor_id`` =
+    ``g.user_id`` on the plan it creates). On failure returns
+    ``(None, None, (response, status))`` so callers can early-return it.
+    """
+    from plugins.subscription.subscription.repositories.tarif_plan_repository import (
+        TarifPlanRepository,
+    )
+
+    package_repo = GhrmSoftwarePackageRepository(db.session)
+    package = package_repo.find_by_id(package_id)
+    if package is None:
+        return None, None, (jsonify({"error": "Package not found"}), 404)
+
+    plan = TarifPlanRepository(db.session).find_by_id(package.tariff_plan_id)
+    if plan is None or str(plan.vendor_id) != str(g.user_id):
+        return None, None, (jsonify({"error": "You do not own this package"}), 403)
+
+    return package, plan, None
+
+
+@ghrm_bp.route("/api/v1/ghrm/vendor/packages", methods=["GET"])
+@require_auth
+@require_user_permission("marketplace.vendor")
+def vendor_list_packages():
+    """Vendor self-service: list the packages the calling vendor owns.
+
+    Ownership is the linked plan's ``vendor_id`` == caller. Gated behind the
+    ``marketplace_enabled`` flag (403 when off), mirroring the create route.
+    """
+    from plugins.subscription.subscription.models import TarifPlan
+
+    if not marketplace_enabled():
+        return jsonify({"error": "Vendor mode is not enabled"}), 403
+
+    vendor_plans = (
+        db.session.query(TarifPlan).filter(TarifPlan.vendor_id == g.user_id).all()
+    )
+    plan_by_id = {str(plan.id): plan for plan in vendor_plans}
+
+    package_repo = GhrmSoftwarePackageRepository(db.session)
+    packages = package_repo.find_by_tariff_plan_ids([plan.id for plan in vendor_plans])
+    items = [
+        _vendor_package_dict(package, plan_by_id.get(str(package.tariff_plan_id)))
+        for package in packages
+    ]
+    return jsonify({"packages": items})
+
+
+@ghrm_bp.route("/api/v1/ghrm/vendor/packages/<package_id>", methods=["GET"])
+@require_auth
+@require_user_permission("marketplace.vendor")
+def vendor_get_package(package_id):
+    """Vendor self-service: read one owned package (404 missing / 403 not owned)."""
+    if not marketplace_enabled():
+        return jsonify({"error": "Vendor mode is not enabled"}), 403
+
+    package, plan, error = _load_owned_vendor_package(package_id)
+    if error is not None:
+        return error
+    return jsonify({"package": _vendor_package_dict(package, plan)})
+
+
+@ghrm_bp.route("/api/v1/ghrm/vendor/packages/<package_id>", methods=["PUT"])
+@require_auth
+@require_user_permission("marketplace.vendor")
+def vendor_update_package(package_id):
+    """Vendor self-service: edit an owned package + its linked plan.
+
+    ``price`` maps to the plan; ``name``/``description``/``is_active`` are kept
+    in sync on both plan and package so the catalog reflects the edit;
+    ``github_owner``/``github_repo`` are package-only.
+    """
+    from plugins.subscription.subscription.cache_keys import invalidate_plan_cache
+    from plugins.subscription.subscription.repositories.tarif_plan_repository import (
+        TarifPlanRepository,
+    )
+
+    if not marketplace_enabled():
+        return jsonify({"error": "Vendor mode is not enabled"}), 403
+
+    package, plan, error = _load_owned_vendor_package(package_id)
+    if error is not None:
+        return error
+
+    body = request.get_json() or {}
+
+    if "price" in body:
+        try:
+            plan.price = float(Decimal(str(body["price"])))
+        except (InvalidOperation, TypeError, ValueError):
+            return jsonify({"error": "Price is not a valid number"}), 400
+
+    package_fields = ("name", "description", "github_owner", "github_repo", "is_active")
+    for field in package_fields:
+        if field in body:
+            setattr(package, field, body[field])
+
+    for field in ("name", "description", "is_active"):
+        if field in body:
+            setattr(plan, field, body[field])
+
+    plan_repo = TarifPlanRepository(db.session)
+    plan_repo.save(plan)
+    invalidate_plan_cache()
+    GhrmSoftwarePackageRepository(db.session).save(package)
+
+    return jsonify({"package": _vendor_package_dict(package, plan)})
+
+
+@ghrm_bp.route("/api/v1/ghrm/vendor/packages/<package_id>", methods=["DELETE"])
+@require_auth
+@require_user_permission("marketplace.vendor")
+def vendor_delete_package(package_id):
+    """Vendor self-service: delete an owned package and its vendor-owned plan.
+
+    The inverse of ``vendor_create_package`` (which created both): remove the
+    package, then its linked plan, invalidating the plan cache.
+    """
+    from plugins.subscription.subscription.cache_keys import invalidate_plan_cache
+    from plugins.subscription.subscription.repositories.tarif_plan_repository import (
+        TarifPlanRepository,
+    )
+
+    if not marketplace_enabled():
+        return jsonify({"error": "Vendor mode is not enabled"}), 403
+
+    package, plan, error = _load_owned_vendor_package(package_id)
+    if error is not None:
+        return error
+
+    GhrmSoftwarePackageRepository(db.session).delete(package.id)
+    TarifPlanRepository(db.session).delete(plan.id)
+    invalidate_plan_cache()
+
+    return jsonify({"success": True})
 
 
 # ─── Admin endpoints ─────────────────────────────────────────────────────────

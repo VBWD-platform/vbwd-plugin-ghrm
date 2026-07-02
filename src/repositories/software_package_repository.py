@@ -47,6 +47,24 @@ class GhrmSoftwarePackageRepository:
             .all()
         )
 
+    def find_by_tariff_plan_ids(self, plan_ids: List[Any]) -> List[GhrmSoftwarePackage]:
+        """Packages linked to any of ``plan_ids`` (the vendor's "my packages").
+
+        Ownership lives on the linked plan's ``vendor_id``; the caller resolves
+        the vendor's plan ids and passes them here. Empty input ⇒ empty result
+        (``in_([])`` matches nothing).
+        """
+        if not plan_ids:
+            return []
+        return (
+            self.session.query(GhrmSoftwarePackage)
+            .filter(GhrmSoftwarePackage.tariff_plan_id.in_(plan_ids))
+            .order_by(
+                GhrmSoftwarePackage.sort_order.asc(), GhrmSoftwarePackage.name.asc()
+            )
+            .all()
+        )
+
     def find_all(
         self,
         page: int = 1,

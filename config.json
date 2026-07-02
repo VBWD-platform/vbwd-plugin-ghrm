@@ -9,5 +9,6 @@
   "software_catalogue_cms_page_slug": "ghrm-software-catalogue",
   "software_detail_cms_page_slug": "ghrm-software-detail",
   "grace_period_fallback_days": 7,
-  "allow_extensive_github_permissions": false
+  "allow_extensive_github_permissions": false,
+  "marketplace_enabled": false
 }

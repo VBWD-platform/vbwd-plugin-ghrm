@@ -1,6 +1,6 @@
 """GHRM — GitHub Repo Manager plugin."""
 from typing import Optional, Dict, Any, TYPE_CHECKING
-from vbwd.plugins.base import BasePlugin, PluginMetadata
+from vbwd.plugins.base import BasePlugin, PluginMetadata, PublicRouteDeclaration
 
 if TYPE_CHECKING:
     from flask import Blueprint
@@ -20,6 +20,9 @@ DEFAULT_CONFIG = {
     "software_detail_cms_layout_slug": "ghrm-software-detail",
     "grace_period_fallback_days": 7,
     "allow_extensive_github_permissions": False,
+    # Vendor-mode (marketplace): gates the self-service vendor package route.
+    # Off by default so a classic install (admin-only packages) is unchanged.
+    "marketplace_enabled": False,
 }
 
 
@@ -63,6 +66,29 @@ class GhrmPlugin(BasePlugin):
         if config:
             merged.update(config)
         super().initialize(merged)
+
+    def declare_public_routes(self) -> PublicRouteDeclaration:
+        """Public GHRM marketplace reads + the API-key-gated CI sync trigger.
+
+        The marketplace (categories, config, packages, widgets) browses
+        pre-login; the sync trigger is authenticated by an API key validated
+        inside the handler (public to the CI runner, not the session).
+        """
+        return PublicRouteDeclaration(
+            read={
+                "/api/v1/ghrm/categories": "Public GHRM marketplace category listing.",
+                "/api/v1/ghrm/config": "Public GHRM marketplace config for the storefront.",
+                "/api/v1/ghrm/packages": "Public GHRM software-package listing.",
+                "/api/v1/ghrm/packages/<slug>": "Public single GHRM package detail.",
+                "/api/v1/ghrm/packages/<slug>/related": "Public related-packages list for a GHRM package.",
+                "/api/v1/ghrm/packages/<slug>/versions": "Public version history for a GHRM package.",
+                "/api/v1/ghrm/packages/by-plan/<plan_id>": "Public GHRM package lookup by plan id.",
+                "/api/v1/ghrm/widgets": "Public GHRM storefront widgets.",
+            },
+            mutation={
+                "/api/v1/ghrm/sync": "GHRM CI sync trigger; authenticated by an API key validated inside the handler.",
+            },
+        )
 
     def get_blueprint(self) -> Optional["Blueprint"]:
         from plugins.ghrm.src.routes import ghrm_bp

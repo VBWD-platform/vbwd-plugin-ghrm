@@ -98,6 +98,18 @@
           "description": "Days after subscription cancellation before GitHub collaborator access is revoked"
         }
       ]
+    },
+    {
+      "id": "marketplace",
+      "label": "Vendor mode",
+      "fields": [
+        {
+          "key": "marketplace_enabled",
+          "label": "Enable vendor self-service packages",
+          "component": "checkbox",
+          "description": "Off by default. When on, a user holding the marketplace.vendor permission can create a software package sold as a subscription via POST /api/v1/ghrm/vendor/packages. The package is linked to a plan the vendor owns (vendor_id), so a purchase attributes the sale to the vendor automatically."
+        }
+      ]
     }
   ]
 }
