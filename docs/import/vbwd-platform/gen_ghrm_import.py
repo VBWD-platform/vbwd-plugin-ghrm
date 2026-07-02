@@ -10,7 +10,6 @@ Source: github.com/VBWD-platform public repos (fetched via `gh api`).
 """
 import json
 import os
-import sys
 
 SRC = os.environ.get("REPOS_JSON")
 OUT_DIR = os.environ["OUT_DIR"]
