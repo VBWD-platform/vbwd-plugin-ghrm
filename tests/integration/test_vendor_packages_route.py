@@ -310,3 +310,150 @@ def test_vendor_delete_403_when_not_owned(app, db, client, monkeypatch):
         f"{VENDOR_PACKAGES_PATH}/{created['id']}", headers=_auth(other_token)
     )
     assert resp.status_code == 403, resp.get_json()
+
+
+# ─── Content fields parity with the fe-admin software form ───────────────────
+#
+# A vendor editing their OWN package must be able to set the SAME content fields
+# the fe-admin software form exposes: package_kind, bundle_repos,
+# collaborator_permission, author_name, icon_url (on top of name / description /
+# github_owner / github_repo / price). These tests round-trip those fields and
+# assert the enum validation mirrors the admin path.
+
+
+def _allow_extensive_permissions(monkeypatch):
+    """Make the plugin behave as if extensive GitHub permissions are enabled."""
+    monkeypatch.setattr(
+        routes, "_cfg", lambda: {"allow_extensive_github_permissions": True}
+    )
+
+
+def test_vendor_create_persists_content_fields(app, db, client, monkeypatch):
+    from plugins.ghrm.src.repositories.software_package_repository import (
+        GhrmSoftwarePackageRepository,
+    )
+
+    _user, token = _make_vendor(app, db, f"gv-c-fields-{uuid4().hex[:6]}@example.com")
+    _enable_marketplace(monkeypatch, True)
+
+    body = _package_body("Bundle Package")
+    body.update(
+        {
+            "package_kind": "bundle",
+            "bundle_repos": [
+                {"owner": "acme", "repo": "widget"},
+                {"owner": "acme", "repo": "gadget"},
+            ],
+            "collaborator_permission": "pull",
+            "author_name": "Jane Vendor",
+            "icon_url": "https://cdn.example.com/icon.png",
+        }
+    )
+    resp = client.post(VENDOR_PACKAGES_PATH, json=body, headers=_auth(token))
+    assert resp.status_code == 201, resp.get_json()
+
+    package = resp.get_json()["package"]
+    assert package["package_kind"] == "bundle"
+    assert package["bundle_repos"] == [
+        {"owner": "acme", "repo": "widget"},
+        {"owner": "acme", "repo": "gadget"},
+    ]
+    assert package["collaborator_permission"] == "pull"
+    assert package["author_name"] == "Jane Vendor"
+    assert package["icon_url"] == "https://cdn.example.com/icon.png"
+
+    stored = GhrmSoftwarePackageRepository(db.session).find_by_id(package["id"])
+    assert stored.package_kind == "bundle"
+    assert stored.author_name == "Jane Vendor"
+    assert stored.icon_url == "https://cdn.example.com/icon.png"
+    assert stored.repo_targets() == [("acme", "widget"), ("acme", "gadget")]
+
+
+def test_vendor_create_invalid_package_kind_is_400(app, db, client, monkeypatch):
+    _user, token = _make_vendor(app, db, f"gv-c-pk-{uuid4().hex[:6]}@example.com")
+    _enable_marketplace(monkeypatch, True)
+
+    body = _package_body("Bad Kind")
+    body["package_kind"] = "triple"
+    resp = client.post(VENDOR_PACKAGES_PATH, json=body, headers=_auth(token))
+    assert resp.status_code == 400, resp.get_json()
+    assert "package_kind" in resp.get_json()["error"]
+
+
+def test_vendor_create_invalid_collaborator_permission_is_400(
+    app, db, client, monkeypatch
+):
+    _user, token = _make_vendor(app, db, f"gv-c-cp-{uuid4().hex[:6]}@example.com")
+    _enable_marketplace(monkeypatch, True)
+
+    body = _package_body("Bad Perm")
+    body["collaborator_permission"] = "superuser"
+    resp = client.post(VENDOR_PACKAGES_PATH, json=body, headers=_auth(token))
+    assert resp.status_code == 400, resp.get_json()
+    assert "collaborator_permission" in resp.get_json()["error"]
+
+
+def test_vendor_update_persists_content_fields(app, db, client, monkeypatch):
+    from plugins.ghrm.src.repositories.software_package_repository import (
+        GhrmSoftwarePackageRepository,
+    )
+
+    _user, token = _make_vendor(app, db, f"gv-u-fields-{uuid4().hex[:6]}@example.com")
+    _enable_marketplace(monkeypatch, True)
+    created = _create_package(client, token, "Before Fields")
+    _allow_extensive_permissions(monkeypatch)
+
+    resp = client.put(
+        f"{VENDOR_PACKAGES_PATH}/{created['id']}",
+        json={
+            "package_kind": "bundle",
+            "bundle_repos": [{"owner": "acme", "repo": "core"}],
+            "collaborator_permission": "push",
+            "author_name": "Updated Author",
+            "icon_url": "https://cdn.example.com/new.png",
+        },
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200, resp.get_json()
+    package = resp.get_json()["package"]
+    assert package["package_kind"] == "bundle"
+    assert package["bundle_repos"] == [{"owner": "acme", "repo": "core"}]
+    assert package["collaborator_permission"] == "push"
+    assert package["author_name"] == "Updated Author"
+    assert package["icon_url"] == "https://cdn.example.com/new.png"
+
+    stored = GhrmSoftwarePackageRepository(db.session).find_by_id(created["id"])
+    assert stored.package_kind == "bundle"
+    assert stored.collaborator_permission == "push"
+    assert stored.author_name == "Updated Author"
+    assert stored.icon_url == "https://cdn.example.com/new.png"
+
+
+def test_vendor_update_invalid_package_kind_is_400(app, db, client, monkeypatch):
+    _user, token = _make_vendor(app, db, f"gv-u-pk-{uuid4().hex[:6]}@example.com")
+    _enable_marketplace(monkeypatch, True)
+    created = _create_package(client, token, "Kind Guard")
+
+    resp = client.put(
+        f"{VENDOR_PACKAGES_PATH}/{created['id']}",
+        json={"package_kind": "quadruple"},
+        headers=_auth(token),
+    )
+    assert resp.status_code == 400, resp.get_json()
+    assert "package_kind" in resp.get_json()["error"]
+
+
+def test_vendor_update_invalid_collaborator_permission_is_400(
+    app, db, client, monkeypatch
+):
+    _user, token = _make_vendor(app, db, f"gv-u-cp-{uuid4().hex[:6]}@example.com")
+    _enable_marketplace(monkeypatch, True)
+    created = _create_package(client, token, "Perm Guard")
+
+    resp = client.put(
+        f"{VENDOR_PACKAGES_PATH}/{created['id']}",
+        json={"collaborator_permission": "root"},
+        headers=_auth(token),
+    )
+    assert resp.status_code == 400, resp.get_json()
+    assert "collaborator_permission" in resp.get_json()["error"]

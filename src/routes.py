@@ -25,6 +25,10 @@ Vendor self-service (requires_auth + marketplace.vendor, marketplace-mode gated)
     GET    /api/v1/ghrm/vendor/packages/<id>         read one owned package
     PUT    /api/v1/ghrm/vendor/packages/<id>         update an owned package + plan
     DELETE /api/v1/ghrm/vendor/packages/<id>         delete an owned package + plan
+    GET    /api/v1/ghrm/vendor/packages/<id>/tags            list an owned package's tags
+    PUT    /api/v1/ghrm/vendor/packages/<id>/tags            replace an owned package's tags
+    GET    /api/v1/ghrm/vendor/packages/<id>/custom-fields   read owned package custom fields
+    PUT    /api/v1/ghrm/vendor/packages/<id>/custom-fields   upsert owned package custom fields
 
 Admin (require_admin):
     GET    /api/v1/admin/ghrm/packages
@@ -83,7 +87,10 @@ from plugins.ghrm.src.services.github_access_service import (
 )
 from plugins.ghrm.src.services.github_app_client import IGithubAppClient
 from plugins.ghrm.src.services.github_app_client_real import GithubAppClientError
-from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
+from plugins.ghrm.src.models.ghrm_software_package import (
+    GhrmSoftwarePackage,
+    DEFAULT_PACKAGE_KIND,
+)
 
 logger = logging.getLogger(__name__)
 ghrm_bp = Blueprint("ghrm", __name__)
@@ -589,6 +596,54 @@ def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
+# Package content fields a vendor may set on their OWN package, mirroring the
+# fe-admin software form. Plain (non-enum) string fields are applied verbatim;
+# the enum fields (collaborator_permission, package_kind, bundle_repos) are
+# validated through the SAME helpers the admin path uses. Ops/privileged
+# controls (sync_api_key, sync overrides, ownership) are deliberately excluded.
+_VENDOR_PLAIN_CONTENT_FIELDS = ("author_name", "icon_url")
+
+
+def _resolve_vendor_content_fields(body: dict, current_package=None) -> dict:
+    """Validate + resolve the vendor-editable package content fields (S113).
+
+    Returns a mapping of ``attribute -> value`` for the fields present in
+    ``body``, validating the enum fields exactly as the admin create/update
+    paths do (``package_kind`` ∈ single/bundle; ``collaborator_permission`` ∈
+    the allowed set, clamped to Read unless extensive permissions are enabled;
+    ``bundle_repos`` non-empty for a bundle). Raises
+    :class:`GhrmValidationError` on any invalid value so callers return 400.
+
+    ``current_package`` supplies the fallback ``package_kind`` / ``bundle_repos``
+    on update when only one of the pair is supplied (mirrors admin update).
+    """
+    resolved: dict = {}
+    for field in _VENDOR_PLAIN_CONTENT_FIELDS:
+        if field in body:
+            resolved[field] = body[field]
+
+    if "collaborator_permission" in body:
+        allow_extensive = bool(_cfg().get("allow_extensive_github_permissions", False))
+        resolved["collaborator_permission"] = validate_collaborator_permission(
+            body["collaborator_permission"], allow_extensive=allow_extensive
+        )
+
+    if "package_kind" in body or "bundle_repos" in body:
+        current_kind = getattr(current_package, "package_kind", None)
+        if "package_kind" in body:
+            effective_kind = validate_package_kind(body["package_kind"])
+        else:
+            effective_kind = current_kind or DEFAULT_PACKAGE_KIND
+        current_bundle = getattr(current_package, "bundle_repos", None)
+        resolved["package_kind"] = effective_kind
+        resolved["bundle_repos"] = validate_bundle_repos(
+            body["bundle_repos"] if "bundle_repos" in body else current_bundle,
+            kind=effective_kind,
+        )
+
+    return resolved
+
+
 @ghrm_bp.route("/api/v1/ghrm/vendor/packages", methods=["POST"])
 @require_auth
 @require_user_permission("marketplace.vendor")
@@ -634,6 +689,13 @@ def vendor_create_package():
     if not slug:
         return jsonify({"error": "A valid name or slug is required"}), 400
 
+    # Validate the content fields BEFORE creating the plan so an invalid payload
+    # fails cleanly (400) without leaving an orphan vendor plan behind.
+    try:
+        content_fields = _resolve_vendor_content_fields(body)
+    except GhrmValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+
     package_repo = GhrmSoftwarePackageRepository(db.session)
     plan_repo = TarifPlanRepository(db.session)
     if package_repo.find_by_slug(slug) or plan_repo.find_by_slug(slug):
@@ -660,6 +722,8 @@ def vendor_create_package():
         github_repo=body["github_repo"],
         is_active=True,
     )
+    for attribute, value in content_fields.items():
+        setattr(package, attribute, value)
     package_repo.save(package)
 
     return jsonify({"package": package.to_dict()}), 201
@@ -753,7 +817,11 @@ def vendor_update_package(package_id):
 
     ``price`` maps to the plan; ``name``/``description``/``is_active`` are kept
     in sync on both plan and package so the catalog reflects the edit;
-    ``github_owner``/``github_repo`` are package-only.
+    ``github_owner``/``github_repo`` are package-only. The content fields the
+    fe-admin software form exposes (``author_name``, ``icon_url``,
+    ``collaborator_permission``, ``package_kind``, ``bundle_repos``) are applied
+    through :func:`_resolve_vendor_content_fields`, validated the same way as the
+    admin path.
     """
     from plugins.subscription.subscription.cache_keys import invalidate_plan_cache
     from plugins.subscription.subscription.repositories.tarif_plan_repository import (
@@ -775,10 +843,17 @@ def vendor_update_package(package_id):
         except (InvalidOperation, TypeError, ValueError):
             return jsonify({"error": "Price is not a valid number"}), 400
 
+    try:
+        content_fields = _resolve_vendor_content_fields(body, current_package=package)
+    except GhrmValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+
     package_fields = ("name", "description", "github_owner", "github_repo", "is_active")
     for field in package_fields:
         if field in body:
             setattr(package, field, body[field])
+    for attribute, value in content_fields.items():
+        setattr(package, attribute, value)
 
     for field in ("name", "description", "is_active"):
         if field in body:
@@ -818,6 +893,118 @@ def vendor_delete_package(package_id):
     invalidate_plan_cache()
 
     return jsonify({"success": True})
+
+
+# ─── Vendor: Tags & custom fields (own packages) ─────────────────────────────
+#
+# Vendor tags / custom fields are the SAME generic operations admins get — both
+# resolve the core ``tags_and_custom_fields()`` port (D5/D6 by-id seam) — so
+# vendor + admin never diverge. GHRM has no stock and no images, so only tags +
+# custom fields are exposed here. The entity type is ``ghrm_software_package``
+# (registered by the plugin's ``on_enable``).
+
+_GHRM_PACKAGE_ENTITY_TYPE = "ghrm_software_package"
+
+
+def _vendor_tags_and_custom_fields():
+    """The core generic tags / custom-fields port (D5/D6 by-id seam)."""
+    return current_app.container.tags_and_custom_fields()
+
+
+@ghrm_bp.route("/api/v1/ghrm/vendor/packages/<package_id>/tags", methods=["GET"])
+@require_auth
+@require_user_permission("marketplace.vendor")
+def vendor_get_package_tags(package_id):
+    """Vendor self-service: tag slugs on a package the vendor owns (else 403)."""
+    if not marketplace_enabled():
+        return jsonify({"error": "Vendor mode is not enabled"}), 403
+
+    _package, _plan, error = _load_owned_vendor_package(package_id)
+    if error is not None:
+        return error
+
+    port = _vendor_tags_and_custom_fields()
+    return jsonify({"tags": port.get_tags(_GHRM_PACKAGE_ENTITY_TYPE, package_id)}), 200
+
+
+@ghrm_bp.route("/api/v1/ghrm/vendor/packages/<package_id>/tags", methods=["PUT"])
+@require_auth
+@require_user_permission("marketplace.vendor")
+def vendor_set_package_tags(package_id):
+    """Vendor self-service: replace the full tag set (unknown slugs auto-create)."""
+    if not marketplace_enabled():
+        return jsonify({"error": "Vendor mode is not enabled"}), 403
+
+    _package, _plan, error = _load_owned_vendor_package(package_id)
+    if error is not None:
+        return error
+
+    data = request.get_json() or {}
+    slugs = data.get("tags")
+    if not isinstance(slugs, list):
+        return jsonify({"error": "tags must be a list"}), 400
+
+    port = _vendor_tags_and_custom_fields()
+    port.set_tags(_GHRM_PACKAGE_ENTITY_TYPE, package_id, slugs)
+    return jsonify({"tags": port.get_tags(_GHRM_PACKAGE_ENTITY_TYPE, package_id)}), 200
+
+
+@ghrm_bp.route(
+    "/api/v1/ghrm/vendor/packages/<package_id>/custom-fields", methods=["GET"]
+)
+@require_auth
+@require_user_permission("marketplace.vendor")
+def vendor_get_package_custom_fields(package_id):
+    """Vendor self-service: custom-field values on a package the vendor owns."""
+    if not marketplace_enabled():
+        return jsonify({"error": "Vendor mode is not enabled"}), 403
+
+    _package, _plan, error = _load_owned_vendor_package(package_id)
+    if error is not None:
+        return error
+
+    port = _vendor_tags_and_custom_fields()
+    values = port.get_custom_fields(_GHRM_PACKAGE_ENTITY_TYPE, package_id)
+    return jsonify({"custom_fields": values}), 200
+
+
+@ghrm_bp.route(
+    "/api/v1/ghrm/vendor/packages/<package_id>/custom-fields", methods=["PUT"]
+)
+@require_auth
+@require_user_permission("marketplace.vendor")
+def vendor_set_package_custom_fields(package_id):
+    """Vendor self-service: partial upsert of custom-field values (``None`` clears)."""
+    if not marketplace_enabled():
+        return jsonify({"error": "Vendor mode is not enabled"}), 403
+
+    _package, _plan, error = _load_owned_vendor_package(package_id)
+    if error is not None:
+        return error
+
+    data = request.get_json() or {}
+    values = data.get("custom_fields")
+    if not isinstance(values, dict):
+        return jsonify({"error": "custom_fields must be an object"}), 400
+
+    from vbwd.services.tags_and_custom_fields import (
+        CustomFieldValidationError,
+        UnknownCustomFieldError,
+        UnknownEntityTypeError,
+    )
+
+    port = _vendor_tags_and_custom_fields()
+    try:
+        port.set_custom_fields(_GHRM_PACKAGE_ENTITY_TYPE, package_id, values)
+    except (
+        CustomFieldValidationError,
+        UnknownCustomFieldError,
+        UnknownEntityTypeError,
+    ) as validation_error:
+        return jsonify({"error": str(validation_error)}), 400
+
+    updated = port.get_custom_fields(_GHRM_PACKAGE_ENTITY_TYPE, package_id)
+    return jsonify({"custom_fields": updated}), 200
 
 
 # ─── Admin endpoints ─────────────────────────────────────────────────────────
@@ -965,6 +1152,19 @@ def admin_update_package(pkg_id):
                     setattr(sync, field, body[field])
             sync_repo.save(sync)
     repo.save(pkg)
+    return jsonify(pkg.to_dict())
+
+
+@ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>", methods=["GET"])
+@require_auth
+@require_admin
+@require_permission("ghrm.packages.view")
+def admin_get_package(pkg_id):
+    """Return one package's admin dict (same serialization the list uses)."""
+    repo = GhrmSoftwarePackageRepository(db.session)
+    pkg = repo.find_by_id(pkg_id)
+    if not pkg:
+        return jsonify({"error": "Not found"}), 404
     return jsonify(pkg.to_dict())
 
 
