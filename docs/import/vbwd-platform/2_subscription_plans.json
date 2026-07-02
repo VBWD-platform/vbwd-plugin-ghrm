@@ -1,0 +1,1396 @@
+{
+  "vbwd_export": "subscription_plans",
+  "version": 1,
+  "instance": "vbwd.cc",
+  "format": "json",
+  "subscription_plans": [
+    {
+      "slug": "ghrm-vbwd-android",
+      "name": "Core — Android",
+      "description": "vbwd-android umbrella — host app + core SDK and feature plugins as submodules (Kotlin/Compose/Hilt). Clone with --recurse-submodules.",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 100,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-app-example",
+      "name": "App Example — Android",
+      "description": "Example host app wiring the vbwd-android core SDK + plugins via GitHub Packages",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 101,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-cms",
+      "name": "Cms — Android",
+      "description": "Config-driven Posts browser over the host CMS embed archive",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 102,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-core",
+      "name": "Core — Android",
+      "description": "vbwd-android SDK — networking, session, plugin system, shared Compose UI (Kotlin/Compose/Hilt port of vbwd-ios)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 103,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-example",
+      "name": "Example — Android",
+      "description": "Reference plugin exercising every PlatformSdk seam — template for new vbwd-android plugins",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 104,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-invoice",
+      "name": "Invoice — Android",
+      "description": "Invoice payment plugin — pay by bank transfer after an emailed invoice",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 105,
+      "category_slugs": [
+        "mobile",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-meinchat",
+      "name": "Meinchat — Android",
+      "description": "Peer-to-peer messaging — image attachments, token transfers, bot rich-choice",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 106,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-meinchat-plus",
+      "name": "Meinchat Plus — Android",
+      "description": "E2E-encrypted messaging — Signal ratchet over meinchat (declared peer dependency)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 107,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-stripe",
+      "name": "Stripe — Android",
+      "description": "Stripe payment plugin — redirects to Stripe Checkout",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 108,
+      "category_slugs": [
+        "mobile",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-subscription",
+      "name": "Subscription — Android",
+      "description": "Subscription plugin — plans, subscriptions, add-ons, dashboard widget, checkout source",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 109,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-tarot",
+      "name": "Tarot — Android",
+      "description": "Tarot card reading with AI-powered interpretations",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 110,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-android-token-payment",
+      "name": "Token Payment — Android",
+      "description": "Token-balance payment plugin — instant, no redirect",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 111,
+      "category_slugs": [
+        "mobile",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-backend",
+      "name": "Backend",
+      "description": "VBWD Backend - Python/Flask API",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 112,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin",
+      "name": "Core — Admin UI",
+      "description": "Core — Admin UI — public VBWD-platform repository (VBWD-platform/vbwd-fe-admin).",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 113,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-analytics-widget",
+      "name": "Analytics Widget — Admin UI",
+      "description": "vbwd fe-admin plugin: analytics-widget",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 114,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-booking",
+      "name": "Booking — Admin UI",
+      "description": "Booking admin frontend plugin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 115,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-bot-telegram",
+      "name": "Bot Telegram — Admin UI",
+      "description": "vbwd fe-admin plugin: bot-telegram-admin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 116,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-c2p2-admin",
+      "name": "C2P2 Admin — Admin UI",
+      "description": "fe-admin plugin for 2C2P transactions",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 117,
+      "category_slugs": [
+        "fe-admin",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-cms",
+      "name": "Cms — Admin UI",
+      "description": "vbwd fe-admin plugin: cms-admin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 118,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-cms-ai",
+      "name": "Cms Ai — Admin UI",
+      "description": "Cms Ai — Admin UI — public VBWD-platform repository (VBWD-platform/vbwd-fe-admin-plugin-cms-ai).",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 119,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-conekta-admin",
+      "name": "Conekta Admin — Admin UI",
+      "description": "fe-admin plugin for Conekta orders",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 120,
+      "category_slugs": [
+        "fe-admin",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-discount",
+      "name": "Discount — Admin UI",
+      "description": "fe-admin discount/coupon plugin — discount management UI",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 121,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-email",
+      "name": "Email — Admin UI",
+      "description": "vbwd fe-admin plugin: email-admin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 122,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-ghrm",
+      "name": "Ghrm — Admin UI",
+      "description": "vbwd fe-admin plugin: ghrm-admin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 123,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-meinchat",
+      "name": "Meinchat — Admin UI",
+      "description": "Meinchat fe-admin plugin — moderation: nicknames ban/unban, conversation inspector, transfer audit log.",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 124,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-mercado-pago-admin",
+      "name": "Mercado Pago Admin — Admin UI",
+      "description": "fe-admin plugin for Mercado Pago payments",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 125,
+      "category_slugs": [
+        "fe-admin",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-promptpay-admin",
+      "name": "Promptpay Admin — Admin UI",
+      "description": "fe-admin plugin for PromptPay reconciliation",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 126,
+      "category_slugs": [
+        "fe-admin",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-referral",
+      "name": "Referral — Admin UI",
+      "description": "VBWD fe-admin referral-admin plugin (S92 Track B)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 127,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-shop",
+      "name": "Shop — Admin UI",
+      "description": "fe-admin shop plugin — product/warehouse/inventory management UI",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 128,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-subscription",
+      "name": "Subscription — Admin UI",
+      "description": "VBWD fe-admin subscription plugin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 129,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-tarot",
+      "name": "Tarot — Admin UI",
+      "description": "vbwd fe-admin plugin: taro-admin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 130,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-token-payment",
+      "name": "Token Payment — Admin UI",
+      "description": "vbwd-fe-admin plugin — pure injection: registers the tokens_paid contributor so admin invoice-detail renders 'Paid with tokens · N tokens' via the shared fe-core PaymentDataBlock.",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 131,
+      "category_slugs": [
+        "fe-admin",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-toss-payments-admin",
+      "name": "Toss Payments Admin — Admin UI",
+      "description": "fe-admin plugin for Toss Payments",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 132,
+      "category_slugs": [
+        "fe-admin",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-truemoney-admin",
+      "name": "Truemoney Admin — Admin UI",
+      "description": "fe-admin plugin for TrueMoney transactions",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 133,
+      "category_slugs": [
+        "fe-admin",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-admin-plugin-wp-import",
+      "name": "Wp Import — Admin UI",
+      "description": "Wp Import — Admin UI — public VBWD-platform repository (VBWD-platform/vbwd-fe-admin-plugin-wp-import).",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 134,
+      "category_slugs": [
+        "fe-admin"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-core",
+      "name": "Core — Shared UI",
+      "description": "Core — Shared UI — public VBWD-platform repository (VBWD-platform/vbwd-fe-core).",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 135,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user",
+      "name": "Core — User UI",
+      "description": "Core — User UI — public VBWD-platform repository (VBWD-platform/vbwd-fe-user).",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 136,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-booking",
+      "name": "Booking — User UI",
+      "description": "Booking user frontend plugin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 137,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-c2p2-payment",
+      "name": "C2P2 Payment — User UI",
+      "description": "fe-user plugin for 2C2P ASEAN checkout",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 138,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-chat",
+      "name": "Chat — User UI",
+      "description": "vbwd fe-user plugin: chat",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 139,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-checkout",
+      "name": "Checkout — User UI",
+      "description": "vbwd fe-user plugin: checkout",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 140,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-cms",
+      "name": "Cms — User UI",
+      "description": "vbwd fe-user plugin: cms",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 141,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-cms-youtube",
+      "name": "Cms Youtube — User UI",
+      "description": "Cms Youtube — User UI — public VBWD-platform repository (VBWD-platform/vbwd-fe-user-plugin-cms-youtube).",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 142,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-conekta-payment",
+      "name": "Conekta Payment — User UI",
+      "description": "fe-user plugin for Conekta Mexico checkout",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 143,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-ghrm",
+      "name": "Ghrm — User UI",
+      "description": "vbwd fe-user plugin: ghrm",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 144,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-landing1",
+      "name": "Landing1 — User UI",
+      "description": "vbwd fe-user plugin: landing1",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 145,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-meinchat",
+      "name": "Meinchat — User UI",
+      "description": "Meinchat fe-user plugin — dashboard UI: inbox, contacts, conversation, nickname settings.",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 146,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-mercado-pago-payment",
+      "name": "Mercado Pago Payment — User UI",
+      "description": "fe-user plugin for Mercado Pago LATAM checkout",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 147,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-paypal-payment",
+      "name": "Paypal Payment — User UI",
+      "description": "vbwd fe-user plugin: paypal-payment",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 148,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-promptpay-payment",
+      "name": "Promptpay Payment — User UI",
+      "description": "fe-user plugin for PromptPay Thailand checkout",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 149,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-shop",
+      "name": "Shop — User UI",
+      "description": "fe-user shop plugin — storefront views, cart, product detail",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 150,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-stripe-payment",
+      "name": "Stripe Payment — User UI",
+      "description": "vbwd fe-user plugin: stripe-payment",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 151,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-subscription",
+      "name": "Subscription — User UI",
+      "description": "VBWD fe-user subscription plugin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 152,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-tarot",
+      "name": "Tarot — User UI",
+      "description": "vbwd fe-user plugin: taro",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 153,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-theme-switcher",
+      "name": "Theme Switcher — User UI",
+      "description": "vbwd fe-user plugin: theme-switcher",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 154,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-token-payment",
+      "name": "Token Payment — User UI",
+      "description": "vbwd-fe-user plugin — TokenPaymentPanel (PENDING invoice), TokenCheckoutQuote (live amount→tokens), and a tokens_paid contributor for the shared fe-core PaymentDataBlock.",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 155,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-toss-payments-payment",
+      "name": "Toss Payments Payment — User UI",
+      "description": "fe-user plugin for Toss Payments Korea widget",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 156,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-truemoney-payment",
+      "name": "Truemoney Payment — User UI",
+      "description": "fe-user plugin for TrueMoney Thailand checkout",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 157,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-withdraw",
+      "name": "Withdraw — User UI",
+      "description": "Withdraw — User UI — public VBWD-platform repository (VBWD-platform/vbwd-fe-user-plugin-withdraw).",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 158,
+      "category_slugs": [
+        "fe-user"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-fe-user-plugin-yookassa-payment",
+      "name": "Yookassa Payment — User UI",
+      "description": "vbwd fe-user plugin: yookassa-payment",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 159,
+      "category_slugs": [
+        "fe-user",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-ios-core",
+      "name": "Core — iOS",
+      "description": "VBWD iOS Core package",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 160,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-ios-plugin-meinchat-plus",
+      "name": "Meinchat Plus — iOS",
+      "description": "meinchat-plus (E2E chat) — iOS plugin (developed in the separate iOS app)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 161,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-ios-plugin-tarot",
+      "name": "Tarot — iOS",
+      "description": "VBWD iOS Tarot plugin (Swift Package)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 162,
+      "category_slugs": [
+        "mobile"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-analytics",
+      "name": "Analytics",
+      "description": "vbwd backend plugin: analytics",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 163,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-booking",
+      "name": "Booking",
+      "description": "Booking plugin — backend (appointments, rooms, spaces, seats)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 164,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-bot-base",
+      "name": "Bot Base",
+      "description": "vbwd backend plugin: bot-base — provider-neutral bot bridge foundation (link, session, link-token)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 165,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-bot-meinchat",
+      "name": "Bot Meinchat",
+      "description": "vbwd backend plugin: bot-meinchat — meinchat in-process bot adapter",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 166,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-bot-meinchat-llm",
+      "name": "Bot Meinchat Llm",
+      "description": "VBWD bot-meinchat-llm: RAG consultant + sales-agent chatbot (S98)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 167,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-bot-search",
+      "name": "Bot Search",
+      "description": "bot-search — a provider-neutral /search catalog-search bot command (BotCommandProvider over the agnostic core search registry)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 168,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-bot-telegram",
+      "name": "Bot Telegram",
+      "description": "vbwd backend plugin: bot-telegram — Telegram bot adapter",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 169,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-c2p2",
+      "name": "C2P2",
+      "description": "2C2P Payment Gateway v4 — ASEAN aggregator (cards, PromptPay, PayNow, GCash, MoMo, etc.)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 170,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-chat",
+      "name": "Chat",
+      "description": "vbwd backend plugin: chat",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 171,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-checkout",
+      "name": "Checkout",
+      "description": "Checkout flow CMS seeder — shared by every billing-completing plugin (shop, booking, subscription)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 172,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-cms",
+      "name": "Cms",
+      "description": "vbwd backend plugin: cms",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 173,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-cms-ai",
+      "name": "Cms Ai",
+      "description": "vbwd backend plugin: cms-ai — prompt-driven content & SEO generation (loopai vendored separately)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 174,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-conekta",
+      "name": "Conekta",
+      "description": "Conekta (Mexico) — cards + MSI + OXXO + SPEI",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 175,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-discount",
+      "name": "Discount",
+      "description": "VBWD backend discount plugin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 176,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-email",
+      "name": "Email",
+      "description": "vbwd backend plugin: email",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 177,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-ghrm",
+      "name": "Ghrm",
+      "description": "vbwd backend plugin: ghrm",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 178,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-loopai-adapter",
+      "name": "Loopai Adapter",
+      "description": "WordPress-compatible LoopAI ingest API backed by the vbwd CMS (S95 plugin)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 179,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-mailchimp",
+      "name": "Mailchimp",
+      "description": "vbwd backend plugin: mailchimp",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 180,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-meinchat",
+      "name": "Meinchat",
+      "description": "Meinchat backend plugin — nickname, address book, 1-on-1 messaging, token transfer.",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 181,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-mercado-pago",
+      "name": "Mercado Pago",
+      "description": "Mercado Pago (LATAM) — 7 countries: Pix, Boleto, OXXO, SPEI, PSE, Webpay, cards",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 182,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-paypal",
+      "name": "Paypal",
+      "description": "vbwd backend plugin: paypal",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 183,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-promptpay",
+      "name": "Promptpay",
+      "description": "PromptPay (Thailand) direct QR + bank webhook reconciliation",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 184,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-referral",
+      "name": "Referral",
+      "description": "VBWD referral coupons plugin (S92 Track B)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 185,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-shipping_flat_rate",
+      "name": "Shipping Flat Rate",
+      "description": "VBWD backend shipping_flat_rate plugin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 186,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-shop",
+      "name": "Shop",
+      "description": "VBWD backend shop plugin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 187,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-stripe",
+      "name": "Stripe",
+      "description": "vbwd backend plugin: stripe",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 188,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-subscription",
+      "name": "Subscription",
+      "description": "VBWD backend subscription plugin",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 189,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-tarot",
+      "name": "Tarot",
+      "description": "vbwd backend plugin: taro",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 190,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-token-payment",
+      "name": "Token Payment",
+      "description": "Backend plugin — pay invoices from a token wallet. Writes invoice.metadata.tokens_paid on capture; integrates with the agnostic core payment-captured seam.",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 191,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-toss-payments",
+      "name": "Toss Payments",
+      "description": "Toss Payments (Korea) — widget checkout + cash receipts (현금영수증)",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 192,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-truemoney",
+      "name": "Truemoney",
+      "description": "TrueMoney Wallet (Thailand) — direct QR + deep-link",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 193,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-withdraw",
+      "name": "Withdraw",
+      "description": "Withdraw — public VBWD-platform repository (VBWD-platform/vbwd-plugin-withdraw).",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 194,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-wp-import",
+      "name": "Wp Import",
+      "description": "Wp Import — public VBWD-platform repository (VBWD-platform/vbwd-plugin-wp-import).",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 195,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "ghrm-vbwd-plugin-yookassa",
+      "name": "Yookassa",
+      "description": "vbwd backend plugin: yookassa",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 196,
+      "category_slugs": [
+        "backend",
+        "payments"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "vbwd_export": "subscription_categories",
+  "version": 1,
+  "instance": "vbwd.cc",
+  "format": "json",
+  "subscription_categories": [
+    {
+      "slug": "backend",
+      "name": "Backend",
+      "description": "Server-side Flask/Python plugins and the core API.",
+      "is_single": false,
+      "sort_order": 10
+    },
+    {
+      "slug": "fe-user",
+      "name": "User Frontend",
+      "description": "Vue user-facing app plugins and shared UI.",
+      "is_single": false,
+      "sort_order": 20
+    },
+    {
+      "slug": "fe-admin",
+      "name": "Admin Frontend",
+      "description": "Vue admin backoffice plugins.",
+      "is_single": false,
+      "sort_order": 30
+    },
+    {
+      "slug": "mobile",
+      "name": "Mobile",
+      "description": "Android (Kotlin/Compose) and iOS (Swift) SDK + plugins.",
+      "is_single": false,
+      "sort_order": 40
+    },
+    {
+      "slug": "payments",
+      "name": "Payments",
+      "description": "Payment-gateway integrations.",
+      "is_single": false,
+      "sort_order": 50
+    }
+  ]
+}
