@@ -239,6 +239,75 @@ def _cfg() -> dict:
         return {}
 
 
+def _load_config_json_fallback() -> dict:
+    """Return the plugin's bundled ``config.json`` (defaults) or ``{}``."""
+    path = os.path.join(os.path.dirname(__file__), "..", "config.json")
+    try:
+        with open(path) as config_file:
+            return json.load(config_file)
+    except Exception:
+        return {}
+
+
+def _resolve_catalogue_and_categories() -> tuple:
+    """Resolve the catalogue page slug and configured category slugs.
+
+    DB plugin config wins; the bundled ``config.json`` provides the defaults
+    (mirrors ``get_public_config`` / ``list_categories``).
+    """
+    cfg = _cfg()
+    fallback = _load_config_json_fallback()
+    catalogue_slug = cfg.get("software_catalogue_cms_page_slug") or fallback.get(
+        "software_catalogue_cms_page_slug", "ghrm-software-catalogue"
+    )
+    category_slugs = cfg.get("software_category_slugs") or fallback.get(
+        "software_category_slugs", []
+    )
+    return catalogue_slug, category_slugs
+
+
+def _build_public_detail_path_resolver():
+    """Return ``package_dict -> public_detail_path`` (fe-user detail path or None).
+
+    The reverse ``plan_id -> category_slug`` map is built ONCE (the first
+    configured category containing a plan wins) so per-item resolution is O(1)
+    with no extra query. A package whose plan is in no configured category falls
+    back to the first configured category (the fe-user detail page fetches by
+    package slug regardless, so the link still resolves). When no categories are
+    configured at all, the resolver returns ``None`` for every package.
+    """
+    from plugins.subscription.subscription.services.catalog_read_model import (
+        CatalogReadModel,
+    )
+
+    catalogue_slug, category_slugs = _resolve_catalogue_and_categories()
+    if not category_slugs:
+        return lambda package_dict: None
+
+    read_model = CatalogReadModel()
+    plan_id_to_category_slug: dict = {}
+    for category_slug in category_slugs:
+        for plan_id in read_model.plan_ids_in_category(category_slug):
+            plan_id_to_category_slug.setdefault(str(plan_id), category_slug)
+
+    fallback_category_slug = category_slugs[0]
+
+    def _resolve(package_dict: dict):
+        category_slug = plan_id_to_category_slug.get(
+            str(package_dict.get("tariff_plan_id")), fallback_category_slug
+        )
+        return f"/{catalogue_slug}/{category_slug}/{package_dict['slug']}"
+
+    return _resolve
+
+
+def _admin_package_dict(package, resolve_public_detail_path) -> dict:
+    """Serialize a package for admin responses, enriched with the detail path."""
+    data = package.to_dict()
+    data["public_detail_path"] = resolve_public_detail_path(data)
+    return data
+
+
 # ─── Public catalogue ────────────────────────────────────────────────────────
 
 
@@ -1020,9 +1089,10 @@ def admin_list_packages():
     query = request.args.get("q") or None
     tariff_plan_id = request.args.get("tariff_plan_id") or None
     repo = GhrmSoftwarePackageRepository(db.session)
+    resolve_public_detail_path = _build_public_detail_path_resolver()
     if tariff_plan_id:
         pkg = repo.find_by_tariff_plan_id(tariff_plan_id)
-        items = [pkg.to_dict()] if pkg else []
+        items = [_admin_package_dict(pkg, resolve_public_detail_path)] if pkg else []
         return jsonify(
             {
                 "items": items,
@@ -1033,7 +1103,9 @@ def admin_list_packages():
             }
         )
     result = repo.find_all(page=page, per_page=per_page, query=query)
-    result["items"] = [p.to_dict() for p in result["items"]]
+    result["items"] = [
+        _admin_package_dict(p, resolve_public_detail_path) for p in result["items"]
+    ]
     return jsonify(result)
 
 
@@ -1079,7 +1151,10 @@ def admin_create_package():
         bundle_repos=bundle_repos,
     )
     repo.save(pkg)
-    return jsonify(pkg.to_dict()), 201
+    return (
+        jsonify(_admin_package_dict(pkg, _build_public_detail_path_resolver())),
+        201,
+    )
 
 
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>", methods=["PUT"])
@@ -1152,7 +1227,7 @@ def admin_update_package(pkg_id):
                     setattr(sync, field, body[field])
             sync_repo.save(sync)
     repo.save(pkg)
-    return jsonify(pkg.to_dict())
+    return jsonify(_admin_package_dict(pkg, _build_public_detail_path_resolver()))
 
 
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>", methods=["GET"])
@@ -1165,7 +1240,7 @@ def admin_get_package(pkg_id):
     pkg = repo.find_by_id(pkg_id)
     if not pkg:
         return jsonify({"error": "Not found"}), 404
-    return jsonify(pkg.to_dict())
+    return jsonify(_admin_package_dict(pkg, _build_public_detail_path_resolver()))
 
 
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>", methods=["DELETE"])
