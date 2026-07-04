@@ -182,6 +182,28 @@ class GhrmPlugin(BasePlugin):
 
         search_provider_registry.register(GhrmPackageSearchProvider())
 
+        # Marketplace vendor-listings seam — contribute this vendor's software
+        # packages to the marketplace admin "what does this user sell?"
+        # aggregation. The soft import lives HERE (the plugin wiring root, not
+        # ghrm source) so ghrm's source stays marketplace-free
+        # (test_vendor_mode_contract) AND the per-plugin isolated CI (ghrm
+        # without marketplace) still enables.
+        try:
+            from plugins.marketplace.marketplace.services import (
+                vendor_listings_registry as marketplace_listings_registry,
+            )
+        except ImportError:
+            marketplace_listings_registry = None
+        if marketplace_listings_registry is not None:
+            from plugins.ghrm.src.marketplace_listings import (
+                GHRM_LISTING_TYPE_ID,
+                vendor_listings_provider,
+            )
+
+            marketplace_listings_registry.register_vendor_listings_provider(
+                GHRM_LISTING_TYPE_ID, vendor_listings_provider
+            )
+
     def _make_access_service(self):
         """Composition root for GithubAccessService.
 
@@ -286,3 +308,18 @@ class GhrmPlugin(BasePlugin):
         from vbwd.services.search import search_provider_registry
 
         search_provider_registry.unregister("ghrm_package")
+
+        # Mirror of the on_enable registration — guarded soft import so the
+        # source stays marketplace-free and disable is safe when absent.
+        try:
+            from plugins.marketplace.marketplace.services import (
+                vendor_listings_registry as marketplace_listings_registry,
+            )
+        except ImportError:
+            marketplace_listings_registry = None
+        if marketplace_listings_registry is not None:
+            from plugins.ghrm.src.marketplace_listings import GHRM_LISTING_TYPE_ID
+
+            marketplace_listings_registry.unregister_vendor_listings_provider(
+                GHRM_LISTING_TYPE_ID
+            )
