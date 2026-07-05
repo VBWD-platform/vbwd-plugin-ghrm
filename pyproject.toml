@@ -20,8 +20,6 @@ dependencies = []
 package-dir = { "plugins.ghrm" = "." }
 packages = [
     "plugins.ghrm",
-    "plugins.ghrm.migrations",
-    "plugins.ghrm.migrations.versions",
     "plugins.ghrm.src",
     "plugins.ghrm.src.models",
     "plugins.ghrm.src.repositories",
@@ -30,4 +28,19 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-"plugins.ghrm" = ["*.json"]
+# Ship everything a pip-installed plugin needs to be self-complete: config JSON,
+# Alembic migrations (the shared backend env.py resolves version_locations from
+# the installed package path), seed scripts, and bin/ helpers.
+"plugins.ghrm" = [
+    "*.json",
+    "migrations/*.py",
+    "migrations/*.mako",
+    "migrations/*.ini",
+    "migrations/**/*.py",
+    "migrations/**/*.mako",
+    "populate_db.py",
+    "populate_*.py",
+    "demo_seed.py",
+    "bin/*",
+    "bin/**/*",
+]
