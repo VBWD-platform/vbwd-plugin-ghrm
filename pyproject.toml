@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vbwd-plugin-ghrm"
+version = "26.6.1"
+description = "VBWD backend plugin: ghrm"
+requires-python = ">=3.11"
+license = { text = "BSL-1.1" }
+dependencies = []
+
+# Runtime lives inside the vbwd-backend host, which provides `vbwd.*` (core) and
+# any sibling plugins declared in PluginMetadata.dependencies. Those are NOT pinned
+# here so the wheel stays host-agnostic; install the host separately.
+
+[tool.setuptools]
+# The repo root IS the plugins/ghrm/ directory; remap it so the wheel exposes
+# the `plugins.ghrm` package that runtime imports (e.g. `from plugins.ghrm...`).
+package-dir = { "plugins.ghrm" = "." }
+packages = [
+    "plugins.ghrm",
+    "plugins.ghrm.migrations",
+    "plugins.ghrm.migrations.versions",
+    "plugins.ghrm.src",
+    "plugins.ghrm.src.models",
+    "plugins.ghrm.src.repositories",
+    "plugins.ghrm.src.services",
+    "plugins.ghrm.src.services.data_exchange",
+]
+
+[tool.setuptools.package-data]
+"plugins.ghrm" = ["*.json"]
