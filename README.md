@@ -17,9 +17,18 @@ All settings live in the admin panel under **Plugins → ghrm → Settings**.
 | `github_oauth_client_secret` | OAuth App Client Secret |
 | `github_oauth_redirect_uri` | Full callback URL registered in the OAuth App |
 | `software_category_slugs` | Comma-separated tariff plan category slugs that expose the Software tab |
+| `software_catalogue_cms_page_slug` | CMS **post** slug for the catalogue index — also the URL base for all catalogue routes (e.g. `software` → `/software`) |
+| `software_detail_cms_page_slug` | CMS **post** slug fetched for **every** package detail page (`/…/:category/:package`) |
 | `software_catalogue_cms_layout_slug` | CMS layout slug for category index and package list pages |
 | `software_detail_cms_layout_slug` | CMS layout slug for package detail pages |
 | `grace_period_fallback_days` | Days after cancellation before GitHub access is revoked |
+
+> **How catalogue, category and detail pages actually render** (and why the
+> detail level can 404 while the listing works) — see
+> [`docs/catalogue-pages.md`](docs/catalogue-pages.md). The `*_cms_page_slug`
+> values must match the CMS posts the seed creates, in **both**
+> `plugins/ghrm/config.json` (read by the seed) and `plugins/config.json` (read
+> at runtime).
 
 ---
 
