@@ -202,6 +202,21 @@ SOFTWARE_PACKAGES = [
         "sort_order": 17,
         "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
     },
+    {
+        "plan_slug": "plugin-mcp",
+        "plan_name": "MCP Server",
+        "categories": ["backend"],
+        "pkg_slug": "vbwd-plugin-mcp",
+        "pkg_name": "MCP Server",
+        "description": "Model Context Protocol server. Exposes permission-gated shop, "
+        "booking, ghrm and subscription reads, ownership-guarded actions and an LLM tool "
+        "to any MCP client over one authenticated endpoint. Agnostic core untouched.",
+        "github_owner": "VBWD-platform",
+        "github_repo": "vbwd-plugin-mcp",
+        "author_name": "VBWD-platform",
+        "sort_order": 18,
+        "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+    },
     # ── dantweb open-source packages (10) ────────────────────────────────────
     {
         "plan_slug": "pkg-lensforge",

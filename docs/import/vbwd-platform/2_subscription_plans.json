@@ -935,6 +935,20 @@
       ]
     },
     {
+      "slug": "ghrm-vbwd-plugin-mcp",
+      "name": "MCP Server",
+      "description": "MCP Server plugin — expose the platform to AI agents over the Model Context Protocol",
+      "price": 0.0,
+      "billing_period": "YEARLY",
+      "features": {},
+      "trial_days": 0,
+      "is_active": true,
+      "sort_order": 165,
+      "category_slugs": [
+        "backend"
+      ]
+    },
+    {
       "slug": "ghrm-vbwd-plugin-bot-base",
       "name": "Bot Base",
       "description": "vbwd backend plugin: bot-base — provider-neutral bot bridge foundation (link, session, link-token)",

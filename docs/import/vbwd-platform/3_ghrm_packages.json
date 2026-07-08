@@ -1175,6 +1175,24 @@
       "tariff_plan_slug": "ghrm-vbwd-plugin-booking"
     },
     {
+      "slug": "vbwd-plugin-mcp",
+      "name": "MCP Server",
+      "author_name": "VBWD-platform",
+      "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+      "github_owner": "VBWD-platform",
+      "github_repo": "vbwd-plugin-mcp",
+      "description": "MCP Server plugin — backend. Runs a Model Context Protocol endpoint (POST /api/v1/mcp) that exposes permission-gated shop, booking, ghrm and subscription reads, ownership-guarded actions, and an LLM tool to any MCP client. Protocol-neutral capability registry; agnostic core untouched.",
+      "github_protected_branch": "main",
+      "tech_specs": {},
+      "related_slugs": [],
+      "is_active": true,
+      "sort_order": 165,
+      "collaborator_permission": "pull",
+      "package_kind": "single",
+      "bundle_repos": [],
+      "tariff_plan_slug": "ghrm-vbwd-plugin-mcp"
+    },
+    {
       "slug": "vbwd-plugin-bot-base",
       "name": "Bot Base",
       "author_name": "VBWD-platform",
