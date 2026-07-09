@@ -63,7 +63,6 @@ def _make_service(package_repo=None, sync_repo=None, github=None):
         package_repo=package_repo or MagicMock(),
         sync_repo=sync_repo or MagicMock(),
         github=github or MockGithubAppClient(),
-        software_category_slugs=["backend", "fe-user", "fe-admin"],
     )
 
 

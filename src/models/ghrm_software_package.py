@@ -49,10 +49,15 @@ def resolve_effective_permission(package: Any, allow_extensive: bool) -> str:
 class GhrmSoftwarePackage(BaseModel):
     __tablename__ = "ghrm_software_package"
 
+    # Nullable so a "make a copy" of a package can land UNLINKED: the plan link
+    # is UNIQUE 1:1, so a copy must not steal or duplicate the source's plan. A
+    # UNIQUE column in Postgres permits many NULLs, so many unlinked copies
+    # coexist. An unlinked package is not reachable via any plan entitlement
+    # (not purchasable/downloadable) and is created inactive.
     tariff_plan_id = db.Column(
         db.UUID,
         db.ForeignKey("subscription_tarif_plan.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         unique=True,
         index=True,
     )
@@ -106,7 +111,9 @@ class GhrmSoftwarePackage(BaseModel):
     def to_dict(self) -> dict:
         return {
             "id": str(self.id),
-            "tariff_plan_id": str(self.tariff_plan_id),
+            "tariff_plan_id": (
+                str(self.tariff_plan_id) if self.tariff_plan_id is not None else None
+            ),
             "name": self.name,
             "slug": self.slug,
             "description": self.description,

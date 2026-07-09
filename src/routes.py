@@ -196,7 +196,6 @@ def _pkg_svc() -> SoftwarePackageService:
         package_repo=GhrmSoftwarePackageRepository(db.session),
         sync_repo=GhrmSoftwareSyncRepository(db.session),
         github=github,
-        software_category_slugs=cfg.get("software_category_slugs", []),
     )
 
 
@@ -829,6 +828,11 @@ def _load_owned_vendor_package(package_id):
     if package is None:
         return None, None, (jsonify({"error": "Package not found"}), 404)
 
+    # An unlinked package (e.g. a fresh copy, tariff_plan_id=None) has no plan and
+    # therefore no vendor owner — never look up a plan by a None id.
+    if package.tariff_plan_id is None:
+        return None, None, (jsonify({"error": "You do not own this package"}), 403)
+
     plan = TarifPlanRepository(db.session).find_by_id(package.tariff_plan_id)
     if plan is None or str(plan.vendor_id) != str(g.user_id):
         return None, None, (jsonify({"error": "You do not own this package"}), 403)
@@ -1155,6 +1159,31 @@ def admin_create_package():
         jsonify(_admin_package_dict(pkg, _build_public_detail_path_resolver())),
         201,
     )
+
+
+@ghrm_bp.route("/api/v1/admin/ghrm/packages/bulk/copy", methods=["POST"])
+@require_auth
+@require_admin
+@require_permission("ghrm.packages.manage")
+def admin_bulk_copy_packages():
+    """Make an UNLINKED copy of each package id (single or bundle).
+
+    Each copy lands with ``tariff_plan_id=None``, inactive, a fresh sync secret
+    and a unique slug (see ``SoftwarePackageService.copy_package``). Unknown ids
+    are skipped, not fatal. Returns 201 with the created packages + count.
+    """
+    body = request.json or {}
+    ids = body.get("ids") or []
+    if not isinstance(ids, list):
+        return jsonify({"error": "'ids' must be a list"}), 400
+    service = _pkg_svc()
+    resolve_public_detail_path = _build_public_detail_path_resolver()
+    created = []
+    for package_id in ids:
+        copy = service.copy_package(package_id)
+        if copy is not None:
+            created.append(_admin_package_dict(copy, resolve_public_detail_path))
+    return jsonify({"packages": created, "count": len(created)}), 201
 
 
 @ghrm_bp.route("/api/v1/admin/ghrm/packages/<pkg_id>", methods=["PUT"])

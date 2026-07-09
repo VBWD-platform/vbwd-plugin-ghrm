@@ -72,7 +72,7 @@
           "optionsKey": "categories",
           "valueKey": "slug",
           "labelKey": "name",
-          "description": "Select which tariff-plan categories are treated as software. Plans assigned to a selected category expose the Software tab, and populate-ghrm builds a /category/<slug> catalogue page per selected category. This is the single source of truth for software categories."
+          "description": "Select which tariff-plan categories are treated as software. GET /ghrm/categories returns the selected categories, and populate-ghrm builds a /category/<slug> catalogue page per selected category. This is the single source of truth for software categories."
         },
         {
           "key": "software_catalogue_cms_page_slug",

@@ -21,6 +21,13 @@ from plugins.ghrm.src.repositories.software_sync_repository import (
 from plugins.ghrm.src.services.github_app_client import IGithubAppClient
 
 
+# Copy-slug construction (make-a-copy). The slug column is UNIQUE String(64), so
+# a copy's slug is derived as ``<base>-copy`` (then ``-copy-2`` ...), truncating
+# the base so the whole slug always fits within the column limit.
+SLUG_MAX_LENGTH = 64
+COPY_SLUG_SUFFIX = "-copy"
+
+
 class GhrmPackageNotFoundError(Exception):
     """Raised when a software package cannot be found."""
 
@@ -134,12 +141,10 @@ class SoftwarePackageService:
         package_repo: GhrmSoftwarePackageRepository,
         sync_repo: GhrmSoftwareSyncRepository,
         github: Optional[IGithubAppClient],
-        software_category_slugs: Optional[List[str]] = None,
     ) -> None:
         self._package_repo = package_repo
         self._sync_repo = sync_repo
         self._github = github
-        self._category_slugs = software_category_slugs or []
 
     def list_packages(
         self,
@@ -342,6 +347,63 @@ class SoftwarePackageService:
 
     def get_by_tariff_plan_id(self, plan_id: str) -> Optional[GhrmSoftwarePackage]:
         return self._package_repo.find_by_tariff_plan_id(plan_id)
+
+    def copy_package(self, package_id: str) -> Optional[GhrmSoftwarePackage]:
+        """Create and persist an UNLINKED copy of a package. ``None`` if absent.
+
+        The copy lands with ``tariff_plan_id=None`` (the plan link is UNIQUE 1:1,
+        so a copy must not steal or duplicate the source's plan), is always
+        inactive, mints a brand-new ``sync_api_key`` (the source's is a secret
+        never reused), resets ``download_counter`` and gets a fresh unique slug.
+        For a bundle the ``bundle_repos`` JSON list is copied verbatim — a
+        bundle's members are embedded JSON, not child rows, so no member repos or
+        packages are touched. Returns ``None`` for an unknown id so a bulk caller
+        can skip it (Liskov: never a crash).
+        """
+        source = self._package_repo.find_by_id(package_id)
+        if source is None:
+            return None
+        copy = GhrmSoftwarePackage(
+            tariff_plan_id=None,
+            name=f"{source.name} (Copy)",
+            slug=self._unique_copy_slug(source.slug),
+            author_name=source.author_name,
+            icon_url=source.icon_url,
+            github_owner=source.github_owner,
+            github_repo=source.github_repo,
+            description=source.description,
+            github_protected_branch=source.github_protected_branch,
+            github_installation_id=source.github_installation_id,
+            sync_api_key=secrets.token_urlsafe(32),
+            tech_specs=dict(source.tech_specs or {}),
+            related_slugs=list(source.related_slugs or []),
+            download_counter=0,
+            is_active=False,
+            sort_order=source.sort_order,
+            collaborator_permission=source.collaborator_permission,
+            package_kind=source.package_kind,
+            bundle_repos=[dict(entry) for entry in (source.bundle_repos or [])],
+        )
+        self._package_repo.save(copy)
+        return copy
+
+    def _unique_copy_slug(self, base_slug: str) -> str:
+        """Return a free ``<base>-copy`` slug (then ``-copy-2`` ...) within 64 chars.
+
+        The base is truncated so ``base + suffix`` never exceeds
+        :data:`SLUG_MAX_LENGTH`, and each candidate is checked against the repo
+        until one is free.
+        """
+        attempt = 1
+        while True:
+            suffix = (
+                COPY_SLUG_SUFFIX if attempt == 1 else f"{COPY_SLUG_SUFFIX}-{attempt}"
+            )
+            truncated_base = base_slug[: SLUG_MAX_LENGTH - len(suffix)]
+            candidate = f"{truncated_base}{suffix}"
+            if self._package_repo.find_by_slug(candidate) is None:
+                return candidate
+            attempt += 1
 
     def rotate_api_key(self, pkg_id: str) -> str:
         """Regenerate sync_api_key for a package. Returns new key."""
