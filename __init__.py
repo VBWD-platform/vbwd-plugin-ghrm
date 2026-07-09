@@ -16,7 +16,7 @@ DEFAULT_CONFIG = {
     "github_oauth_client_id": "",
     "github_oauth_client_secret": "",
     "github_oauth_redirect_uri": "http://localhost:8080/ghrm/auth/github/callback",
-    "software_category_slugs": ["backend", "fe-user", "fe-admin"],
+    "software_category_slugs": ["backend", "fe-user", "fe-admin", "plugin-bundles"],
     "software_detail_cms_layout_slug": "ghrm-software-detail",
     "grace_period_fallback_days": 7,
     "allow_extensive_github_permissions": False,
