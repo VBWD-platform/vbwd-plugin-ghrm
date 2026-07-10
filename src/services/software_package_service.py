@@ -152,13 +152,36 @@ class SoftwarePackageService:
         per_page: int = 20,
         category_slug: Optional[str] = None,
         query: Optional[str] = None,
+        kind: Optional[str] = None,
+        tag_slugs: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """List active packages, optionally filtered by category slug or search query."""
+        """List active packages, optionally filtered by category, search, kind or tags.
+
+        Each item carries a ``tags`` array, populated with ONE bulk tag call over
+        the page's package ids (D6, no N+1) through the repository's tags port.
+        """
         result = self._package_repo.find_all(
-            page=page, per_page=per_page, category_slug=category_slug, query=query
+            page=page,
+            per_page=per_page,
+            category_slug=category_slug,
+            query=query,
+            kind=kind,
+            tag_slugs=tag_slugs,
         )
-        result["items"] = [p.to_dict() for p in result["items"]]
+        packages = result["items"]
+        tags_by_id = self._package_repo.list_package_tags(
+            [package.id for package in packages]
+        )
+        result["items"] = [
+            self._package_dict_with_tags(package, tags_by_id) for package in packages
+        ]
         return result
+
+    @staticmethod
+    def _package_dict_with_tags(package, tags_by_id) -> Dict[str, Any]:
+        data = package.to_dict()
+        data["tags"] = tags_by_id.get(package.id, [])
+        return data
 
     def get_package(self, slug: str) -> Dict[str, Any]:
         """Get package detail with merged cached+override sync data."""

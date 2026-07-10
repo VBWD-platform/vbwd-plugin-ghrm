@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """Populate GHRM data: software packages, CMS layouts, widgets, pages, and CMS category.
 
-Reads software_category_slugs from the plugin's config.json so category
-pages are always in sync with the configured slugs.
+The software catalogue is ONE page (``software``, from the config key
+``software_catalogue_cms_page_slug``) whose widget carries the category/tag/kind
+filters — not one CMS page per category. The retired ``/category`` pages are
+removed by a scoped, destructive cleanup (safe: this seed never runs on deploy).
 
 Usage (inside container):
     python /app/plugins/ghrm/src/bin/populate_ghrm.py
@@ -45,9 +47,6 @@ _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config.json"
 with open(_CONFIG_PATH) as _f:
     _plugin_cfg = json.load(_f)
 
-CATEGORY_SLUGS: list[str] = _plugin_cfg.get(
-    "software_category_slugs", ["backend", "fe-user", "fe-admin"]
-)
 CATALOGUE_LAYOUT_SLUG: str = "ghrm-software-catalogue"
 DETAIL_LAYOUT_SLUG: str = "ghrm-software-detail"
 CATALOGUE_PAGE_SLUG: str = _plugin_cfg.get(
@@ -58,11 +57,6 @@ DETAIL_PAGE_SLUG: str = _plugin_cfg.get(
 )
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-
-
-def slug_to_label(slug: str) -> str:
-    """Convert a slug like 'fe-user' → 'Fe User'."""
-    return slug.replace("-", " ").title()
 
 
 def get_or_create(session, model, slug: str, **kwargs):
@@ -361,6 +355,35 @@ SOFTWARE_PACKAGES = [
 ]
 
 
+# ── Catalogue / detail vue-component widgets ─────────────────────────────────
+#
+# The CMS ``CmsWidgetRenderer.vue`` resolves the component from
+# ``content_json.component`` and spreads ONLY ``content_json.props`` onto it
+# (``v-bind="content_json?.props || {}"``). Per-widget props therefore live under
+# ``props`` — a top-level key would be silently ignored. Single source of truth
+# for the two GHRM widgets (mirrored by docs/imports/widgets/*.json).
+#
+CATALOGUE_WIDGETS = [
+    {
+        "slug": "ghrm-categories",
+        "name": "GHRM Categories",
+        "widget_type": "vue-component",
+        "content_json": {
+            "component": "GhrmCatalogueContent",
+            "props": {"items_per_page": 12},
+        },
+    },
+    {
+        "slug": "ghrm-software-detail",
+        "name": "GHRM Software Detail",
+        "widget_type": "vue-component",
+        "content_json": {
+            "component": "GhrmPackageDetail",
+        },
+    },
+]
+
+
 def _get_or_create_plan(session, slug, name):
     """Return existing TarifPlan by slug or create a free yearly one."""
     plan = session.query(TarifPlan).filter_by(slug=slug).first()
@@ -590,31 +613,11 @@ def seed_catalog(session) -> dict:
 
     print("\n=== CMS Widgets ===")
 
-    WIDGETS = [
-        {
-            "slug": "ghrm-categories",
-            "name": "GHRM Categories",
-            "widget_type": "vue-component",
-            "content_json": {
-                "component": "GhrmCatalogueContent",
-                "items_per_page": 12,
-            },
-        },
-        {
-            "slug": "ghrm-software-detail",
-            "name": "GHRM Software Detail",
-            "widget_type": "vue-component",
-            "content_json": {
-                "component": "GhrmPackageDetail",
-                "items_per_page": 12,
-            },
-        },
-    ]
     # breadcrumbs widget is created by populate_cms.py — look it up here
     breadcrumbs_widget = session.query(CmsWidget).filter_by(slug="breadcrumbs").first()
 
     widget_map: dict = {}
-    for w in WIDGETS:
+    for w in CATALOGUE_WIDGETS:
         widget, created = get_or_create(
             session,
             CmsWidget,
@@ -716,24 +719,50 @@ def seed_catalog(session) -> dict:
 
     print("\n=== CMS Pages ===")
 
-    # ── Template pages (used by GhrmLayoutWrapper to resolve layout + style) ──
+    # ── Retire the per-category pages ────────────────────────────────────────
+    #
+    # The catalogue collapsed from "one CMS page per category" to ONE catalogue
+    # page whose widget filters by category/tag/kind. Delete exactly the pages
+    # this seed used to create — the ``/category`` root and every
+    # ``category/<slug>`` child — and nothing else. Safe because this seed is
+    # dev/demo only and never runs on deploy. (ORM data cleanup, not schema/DDL.)
+    removed_category_pages = (
+        session.query(CmsPost)
+        .filter(
+            CmsPost.type == "page",
+            (CmsPost.slug == "category") | (CmsPost.slug.like("category/%")),
+        )
+        .delete(synchronize_session=False)
+    )
+    print(f"  Removed retired /category pages: {removed_category_pages}")
 
-    tmpl_catalogue, created = get_or_create(
+    # ── Catalogue root page ──────────────────────────────────────────────────
+    #
+    # ONE published, indexed page on the catalogue layout (which hosts the
+    # GhrmCatalogueContent widget). This is what the fe-user ``base`` route
+    # renders via ``CmsPage(slug=cataloguePageSlug)``; its slug is the configured
+    # ``software_catalogue_cms_page_slug`` (default ``software``).
+    catalogue_page, created = get_or_create(
         session,
         CmsPost,
         slug=CATALOGUE_PAGE_SLUG,
         type="page",
-        title="GHRM Catalogue Template",
+        title="Software Catalogue",
         language="en",
         content_json={"type": "doc", "content": []},
-        status="draft",
+        status="published",
         sort_order=0,
         layout_id=layout_catalogue.id,
         meta_title="Software Catalogue",
-        robots="noindex",
+        meta_description="Browse available software packages",
+        robots="index,follow",
     )
-    print(f"  {'Created' if created else 'Exists'}: template /{CATALOGUE_PAGE_SLUG}")
+    print(f"  {'Created' if created else 'Exists'}: /{CATALOGUE_PAGE_SLUG}")
 
+    # ── Detail template page ─────────────────────────────────────────────────
+    #
+    # The detail route renders this noindex template to resolve layout + style
+    # for an individual package.
     tmpl_detail, created = get_or_create(
         session,
         CmsPost,
@@ -750,85 +779,17 @@ def seed_catalog(session) -> dict:
     )
     print(f"  {'Created' if created else 'Exists'}: template /{DETAIL_PAGE_SLUG}")
 
-    # Look up dark-midnight style (created by populate_cms.py)
-    from plugins.cms.src.models.cms_style import CmsStyle as _CmsStyle
-
-    style_dark = session.query(_CmsStyle).filter_by(slug="dark-midnight").first()
-    style_light = session.query(_CmsStyle).filter_by(slug="light-clean").first()
-
-    # /software — alternate root entry point with dark theme
-    page_software, created = get_or_create(
-        session,
-        CmsPost,
-        slug="software",
-        type="page",
-        title="Software",
-        language="en",
-        content_json={"type": "doc", "content": []},
-        status="published",
-        sort_order=0,
-        layout_id=layout_catalogue.id,
-        style_id=style_dark.id if style_dark else None,
-        meta_title="Software Catalogue",
-        meta_description="Browse available software packages",
-        robots="index,follow",
-    )
-    print(f"  {'Created' if created else 'Exists'}: /software")
-
-    # Category index (root /category page)
-    page_index, created = get_or_create(
-        session,
-        CmsPost,
-        slug="category",
-        type="page",
-        title="Software Catalogue",
-        language="en",
-        content_json={"type": "doc", "content": []},
-        status="published",
-        sort_order=0,
-        layout_id=layout_catalogue.id,
-        style_id=style_light.id if style_light else None,
-        meta_title="Software Catalogue",
-        meta_description="Browse available software packages",
-        robots="index,follow",
-    )
-    print(f"  {'Created' if created else 'Exists'}: /category")
-
-    # One page per configured category slug
-    for i, cat_slug in enumerate(CATEGORY_SLUGS):
-        label = slug_to_label(cat_slug)
-        page_slug = f"category/{cat_slug}"
-        page, created = get_or_create(
-            session,
-            CmsPost,
-            slug=page_slug,
-            type="page",
-            title=f"{label} Packages",
-            language="en",
-            content_json={"type": "doc", "content": []},
-            status="published",
-            sort_order=i + 1,
-            layout_id=layout_catalogue.id,
-            style_id=style_light.id if style_light else None,
-            meta_title=f"{label} Packages",
-            meta_description=f"Browse {label} software packages",
-            robots="index,follow",
-        )
-        print(f"  {'Created' if created else 'Exists'}: /{page_slug}")
-
     session.commit()
 
     print("\n=== Done ===")
     print("  CMS category    : ghrm")
     print(f"  Layouts         : {CATALOGUE_LAYOUT_SLUG}, {DETAIL_LAYOUT_SLUG}")
     print(
-        f"  Widgets         : {', '.join(cast(str, w['slug']) for w in WIDGETS)} (vue-component)"
+        f"  Widgets         : "
+        f"{', '.join(cast(str, w['slug']) for w in CATALOGUE_WIDGETS)} (vue-component)"
     )
-    print(f"  Template pages  : {CATALOGUE_PAGE_SLUG}, {DETAIL_PAGE_SLUG}")
-    print(f"  Content pages   : category + {len(CATEGORY_SLUGS)} category pages")
-    print(
-        "\n  Assign a CMS Style to a template page in the admin to override catalogue styles."
-    )
+    print(f"  Catalogue page  : {CATALOGUE_PAGE_SLUG} (published, index,follow)")
+    print(f"  Detail template : {DETAIL_PAGE_SLUG} (noindex)")
 
     return {
         "ghrm_packages": session.query(GhrmSoftwarePackage).count(),

@@ -1,12 +1,40 @@
 """GhrmSoftwarePackageRepository — data access for software packages."""
 from typing import Optional, List, Dict, Any
+from uuid import UUID
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 from vbwd.extensions import db
+from vbwd.services.tags_and_custom_fields import (
+    resolve_tags_and_custom_fields,
+    UnknownEntityTypeError,
+)
+
+# The generic entity-type key GHRM registers (in ``on_enable``) so its packages
+# are taggable through the core tags port. Tag reads/filters go through that
+# port only — this module never imports the tags implementation (D2/agnostic).
+_GHRM_PACKAGE_ENTITY_TYPE = "ghrm_software_package"
 
 
 class GhrmSoftwarePackageRepository:
     def __init__(self, session) -> None:
         self.session = session
+
+    def list_package_tags(self, package_ids: List[UUID]) -> Dict[UUID, List[str]]:
+        """Tag slugs for many packages in ONE query via the core tags port (D6).
+
+        Degrades to an empty map when the tags port has no provider or the
+        ``ghrm_software_package`` entity type is unregistered (plugin loaded
+        without ``on_enable`` having run): a tag filter then yields no matches
+        and list items fall back to empty tags — never a 500.
+        """
+        if not package_ids:
+            return {}
+        provider = resolve_tags_and_custom_fields()
+        if provider is None:
+            return {}
+        try:
+            return provider.get_tags_bulk(_GHRM_PACKAGE_ENTITY_TYPE, list(package_ids))
+        except UnknownEntityTypeError:
+            return {}
 
     def find_by_slug(self, slug: str) -> Optional[GhrmSoftwarePackage]:
         return (
@@ -71,6 +99,8 @@ class GhrmSoftwarePackageRepository:
         per_page: int = 20,
         category_slug: Optional[str] = None,
         query: Optional[str] = None,
+        kind: Optional[str] = None,
+        tag_slugs: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         q = self.session.query(GhrmSoftwarePackage).filter(
             GhrmSoftwarePackage.is_active == True  # noqa: E712
@@ -87,21 +117,49 @@ class GhrmSoftwarePackageRepository:
 
             plan_ids = CatalogReadModel().plan_ids_in_category(category_slug)
             q = q.filter(GhrmSoftwarePackage.tariff_plan_id.in_(plan_ids))
+        if kind:
+            q = q.filter(GhrmSoftwarePackage.package_kind == kind)
         if query:
             term = f"%{query}%"
             q = q.filter(
                 GhrmSoftwarePackage.name.ilike(term)
                 | GhrmSoftwarePackage.slug.ilike(term)
             )
-        total = q.count()
-        items = (
-            q.order_by(
-                GhrmSoftwarePackage.sort_order.asc(), GhrmSoftwarePackage.name.asc()
-            )
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-            .all()
+        q = q.order_by(
+            GhrmSoftwarePackage.sort_order.asc(), GhrmSoftwarePackage.name.asc()
         )
+        if tag_slugs:
+            return self._paginate_by_tags(q, page, per_page, tag_slugs)
+        total = q.count()
+        items = q.offset((page - 1) * per_page).limit(per_page).all()
+        return self._page(items, total, page, per_page)
+
+    def _paginate_by_tags(
+        self, query, page: int, per_page: int, tag_slugs: List[str]
+    ) -> Dict[str, Any]:
+        """Filter the SQL candidate set by tag (AND) in Python, then paginate.
+
+        Tags cannot be filtered in SQL without a core change (the tag rows are
+        core-owned, resolved only through the port), so the SQL-filtered
+        candidates are fetched unpaginated, matched against ``tag_slugs`` (a
+        package matches only when it carries EVERY requested slug), and the page
+        is sliced in Python. ``total``/``pages`` reflect the filtered set.
+        """
+        candidates = query.all()
+        tags_by_id = self.list_package_tags([package.id for package in candidates])
+        required = set(tag_slugs)
+        matched = [
+            package
+            for package in candidates
+            if required.issubset(set(tags_by_id.get(package.id, [])))
+        ]
+        total = len(matched)
+        start = (page - 1) * per_page
+        items = matched[start : start + per_page]
+        return self._page(items, total, page, per_page)
+
+    @staticmethod
+    def _page(items: List[Any], total: int, page: int, per_page: int) -> Dict[str, Any]:
         return {
             "items": items,
             "total": total,

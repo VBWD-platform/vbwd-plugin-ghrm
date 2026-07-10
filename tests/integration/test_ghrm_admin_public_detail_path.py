@@ -2,20 +2,22 @@
 
 The fe-admin GHRM package list + editor render a "view on frontend" link. The
 backend serializes the fe-user public detail path on each admin package
-serialization so the frontend does not reconstruct catalogue/category routing.
+serialization so the frontend does not reconstruct catalogue routing.
+
+S127 flattened the catalogue to ONE page with in-widget filters, so the detail
+path is now ``/<catalogue_page_slug>/<package_slug>`` — no category segment, and
+every package gets a path regardless of its plan's categorization.
 
 Covers the admin LIST and GET-single routes (the ones the fe-admin views load):
-  * a plan attached to a configured (non-first) category → that category in the
-    path (proves real resolution, not the fallback),
-  * a plan in no configured category → the first configured category (fallback),
-    so the link still renders and still resolves (detail fetch is by slug).
+  * a plan attached to a category → still the flat path,
+  * a plan in no category → still the flat path (previously the fallback branch).
 
-The catalogue page slug and configured category slugs are read from the running
-plugin config (via the public ``/ghrm/config`` + ``/ghrm/categories`` endpoints)
-so the assertions hold regardless of the environment's configured values.
+The catalogue page slug is read from the running plugin config (via the public
+``/ghrm/config`` endpoint) so the assertions hold regardless of the
+environment's configured value.
 
 Engineering requirements (binding, restated): TDD-first; DevOps-first; SOLID/DI/
-DRY; Liskov (uncategorized plan → fallback, never a crash); no overengineering.
+DRY; Liskov (uncategorized plan → a path, never a crash); no overengineering.
 Quality guard: ``bin/pre-commit-check.sh --plugin ghrm --full``.
 """
 import os
@@ -120,13 +122,11 @@ def _find_or_create_category(slug: str) -> TarifPlanCategory:
 
 
 class TestAdminPublicDetailPath:
-    def test_get_single_uses_resolved_category_when_plan_categorized(self, db, client):
+    def test_get_single_uses_flat_path_when_plan_categorized(self, db, client):
         admin = _make_admin()
         catalogue_slug = _catalogue_slug(client)
         category_slugs = _configured_category_slugs(client)
         assert category_slugs, "expected the running GHRM config to list categories"
-        # Use a NON-first configured category so the assertion proves resolution
-        # rather than the first-category fallback.
         target_category_slug = category_slugs[-1]
 
         plan = _make_plan()
@@ -142,16 +142,11 @@ class TestAdminPublicDetailPath:
 
         assert response.status_code == 200, response.get_data(as_text=True)
         body = response.get_json()
-        assert body["public_detail_path"] == (
-            f"/{catalogue_slug}/{target_category_slug}/{package.slug}"
-        )
+        assert body["public_detail_path"] == f"/{catalogue_slug}/{package.slug}"
 
-    def test_get_single_falls_back_to_first_category_for_uncategorized_plan(
-        self, db, client
-    ):
+    def test_get_single_flat_path_for_uncategorized_plan(self, db, client):
         admin = _make_admin()
         catalogue_slug = _catalogue_slug(client)
-        first_category_slug = _configured_category_slugs(client)[0]
 
         plan = _make_plan()
         package = _make_package(plan, f"orphan-{uuid.uuid4().hex[:8]}")
@@ -163,14 +158,11 @@ class TestAdminPublicDetailPath:
 
         assert response.status_code == 200, response.get_data(as_text=True)
         body = response.get_json()
-        assert body["public_detail_path"] == (
-            f"/{catalogue_slug}/{first_category_slug}/{package.slug}"
-        )
+        assert body["public_detail_path"] == f"/{catalogue_slug}/{package.slug}"
 
     def test_list_enriches_each_item(self, db, client):
         admin = _make_admin()
         catalogue_slug = _catalogue_slug(client)
-        first_category_slug = _configured_category_slugs(client)[0]
 
         plan = _make_plan()
         package = _make_package(plan, f"listed-{uuid.uuid4().hex[:8]}")
@@ -181,9 +173,7 @@ class TestAdminPublicDetailPath:
         assert response.status_code == 200, response.get_data(as_text=True)
         items = response.get_json()["items"]
         match = next(item for item in items if item["id"] == str(package.id))
-        assert match["public_detail_path"] == (
-            f"/{catalogue_slug}/{first_category_slug}/{package.slug}"
-        )
+        assert match["public_detail_path"] == f"/{catalogue_slug}/{package.slug}"
 
 
 @pytest.fixture(autouse=True)

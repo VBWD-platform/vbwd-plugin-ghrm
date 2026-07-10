@@ -49,6 +49,7 @@ import logging
 import os
 import re
 import secrets
+from typing import Optional
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, jsonify, request, g, current_app
 from vbwd.extensions import db
@@ -90,6 +91,7 @@ from plugins.ghrm.src.services.github_app_client_real import GithubAppClientErro
 from plugins.ghrm.src.models.ghrm_software_package import (
     GhrmSoftwarePackage,
     DEFAULT_PACKAGE_KIND,
+    ALLOWED_PACKAGE_KINDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -266,36 +268,17 @@ def _resolve_catalogue_and_categories() -> tuple:
 
 
 def _build_public_detail_path_resolver():
-    """Return ``package_dict -> public_detail_path`` (fe-user detail path or None).
+    """Return ``package_dict -> "/<catalogue_slug>/<package_slug>"`` (flattened).
 
-    The reverse ``plan_id -> category_slug`` map is built ONCE (the first
-    configured category containing a plan wins) so per-item resolution is O(1)
-    with no extra query. A package whose plan is in no configured category falls
-    back to the first configured category (the fe-user detail page fetches by
-    package slug regardless, so the link still resolves). When no categories are
-    configured at all, the resolver returns ``None`` for every package.
+    S127 flattened the catalogue to ONE page with in-widget filters, so a
+    package's fe-user detail page is ``/<catalogue_slug>/<package_slug>`` (fetched
+    by slug). There is no category segment and no plan→category reverse map: every
+    package always gets a path, regardless of its plan's categorization.
     """
-    from plugins.subscription.subscription.services.catalog_read_model import (
-        CatalogReadModel,
-    )
+    catalogue_slug, _category_slugs = _resolve_catalogue_and_categories()
 
-    catalogue_slug, category_slugs = _resolve_catalogue_and_categories()
-    if not category_slugs:
-        return lambda package_dict: None
-
-    read_model = CatalogReadModel()
-    plan_id_to_category_slug: dict = {}
-    for category_slug in category_slugs:
-        for plan_id in read_model.plan_ids_in_category(category_slug):
-            plan_id_to_category_slug.setdefault(str(plan_id), category_slug)
-
-    fallback_category_slug = category_slugs[0]
-
-    def _resolve(package_dict: dict):
-        category_slug = plan_id_to_category_slug.get(
-            str(package_dict.get("tariff_plan_id")), fallback_category_slug
-        )
-        return f"/{catalogue_slug}/{category_slug}/{package_dict['slug']}"
+    def _resolve(package_dict: dict) -> str:
+        return f"/{catalogue_slug}/{package_dict['slug']}"
 
     return _resolve
 
@@ -374,17 +357,57 @@ def list_categories():
     return jsonify({"categories": categories})
 
 
+def _parse_tag_slugs(raw: Optional[str]) -> Optional[list]:
+    """Parse the ``tags`` query param into a slug list (AND filter) or ``None``.
+
+    Comma-separated; empty segments (``a,,b`` == ``a,b``) and surrounding
+    whitespace are ignored. Absent/empty ⇒ ``None`` (no tag filter).
+    """
+    if not raw:
+        return None
+    slugs = [segment.strip() for segment in raw.split(",") if segment.strip()]
+    return slugs or None
+
+
 @ghrm_bp.route("/api/v1/ghrm/packages", methods=["GET"])
 def list_packages():
-    """List active software packages."""
+    """List active software packages (catalogue widget: category/kind/tags/q)."""
     page = int(request.args.get("page", 1))
     per_page = min(int(request.args.get("per_page", 20)), 100)
     category_slug = request.args.get("category_slug") or None
     query = request.args.get("q") or None
+    kind = request.args.get("kind") or None
+    if kind is not None and kind not in ALLOWED_PACKAGE_KINDS:
+        allowed = ", ".join(ALLOWED_PACKAGE_KINDS)
+        return (
+            jsonify({"error": f"Invalid kind '{kind}'. Must be one of: {allowed}"}),
+            400,
+        )
+    tag_slugs = _parse_tag_slugs(request.args.get("tags"))
     result = _pkg_svc().list_packages(
-        page=page, per_page=per_page, category_slug=category_slug, query=query
+        page=page,
+        per_page=per_page,
+        category_slug=category_slug,
+        query=query,
+        kind=kind,
+        tag_slugs=tag_slugs,
     )
     return jsonify(result)
+
+
+@ghrm_bp.route("/api/v1/ghrm/tags", methods=["GET"])
+def list_package_tags():
+    """Return the tags applicable to GHRM software packages (widget filter opts).
+
+    Public read — feeds the catalogue widget's tag-filter options via the core
+    tags port (the same generic seam the detail/list paths use).
+    """
+    from vbwd.services.tags_and_custom_fields import resolve_tags_and_custom_fields
+
+    tags = resolve_tags_and_custom_fields().list_applicable_tags(
+        "ghrm_software_package"
+    )
+    return jsonify({"tags": tags})
 
 
 @ghrm_bp.route("/api/v1/ghrm/packages/<slug>", methods=["GET"])

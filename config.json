@@ -6,7 +6,7 @@
   "github_oauth_client_secret": "",
   "github_oauth_redirect_uri": "http://localhost:8080/ghrm/auth/github/callback",
   "software_category_slugs": ["backend", "fe-user", "fe-admin", "plugin-bundles"],
-  "software_catalogue_cms_page_slug": "ghrm-software-catalogue",
+  "software_catalogue_cms_page_slug": "software",
   "software_detail_cms_page_slug": "ghrm-software-detail",
   "grace_period_fallback_days": 7,
   "allow_extensive_github_permissions": false,

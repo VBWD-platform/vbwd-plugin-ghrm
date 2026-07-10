@@ -83,7 +83,7 @@ def _make_sync(
 
 class TestListPackages:
     def test_filters_by_category_slug(self):
-        """list_packages passes category_slug to find_all."""
+        """list_packages threads all filters (category/kind/tags/query) to find_all."""
         package_repo = MagicMock()
         package_repo.find_all.return_value = {
             "items": [],
@@ -92,13 +92,40 @@ class TestListPackages:
             "per_page": 20,
             "pages": 1,
         }
+        package_repo.list_package_tags.return_value = {}
 
         svc = _make_service(package_repo=package_repo)
-        svc.list_packages(category_slug="backend")
+        svc.list_packages(
+            category_slug="backend", kind="bundle", tag_slugs=["vue", "billing"]
+        )
 
         package_repo.find_all.assert_called_once_with(
-            page=1, per_page=20, category_slug="backend", query=None
+            page=1,
+            per_page=20,
+            category_slug="backend",
+            query=None,
+            kind="bundle",
+            tag_slugs=["vue", "billing"],
         )
+
+    def test_each_item_carries_tags_via_one_bulk_call(self):
+        """Every list item gains a ``tags`` array via ONE bulk tag call (no N+1)."""
+        package = _make_package(pkg_id="pkg-1", slug="my-pkg")
+        package_repo = MagicMock()
+        package_repo.find_all.return_value = {
+            "items": [package],
+            "total": 1,
+            "page": 1,
+            "per_page": 20,
+            "pages": 1,
+        }
+        package_repo.list_package_tags.return_value = {"pkg-1": ["vue"]}
+
+        svc = _make_service(package_repo=package_repo)
+        result = svc.list_packages()
+
+        assert result["items"][0]["tags"] == ["vue"]
+        package_repo.list_package_tags.assert_called_once_with(["pkg-1"])
 
 
 class TestGetPackage:
