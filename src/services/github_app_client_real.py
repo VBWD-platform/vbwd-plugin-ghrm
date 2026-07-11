@@ -25,6 +25,11 @@ class GithubAppClient(IGithubAppClient):
     GITHUB_API = "https://api.github.com"
     GITHUB_OAUTH_TOKEN_URL = "https://github.com/login/oauth/access_token"
 
+    # GitHub App JWT window: back-date ``iat`` to tolerate clock skew and keep
+    # the token short-lived (GitHub rejects an ``exp`` more than 10 min ahead).
+    JWT_IAT_BACKDATE_SECONDS = 60
+    JWT_EXPIRY_SECONDS = 540
+
     def __init__(
         self,
         app_id: str,
@@ -52,11 +57,24 @@ class GithubAppClient(IGithubAppClient):
             return httpx.Client(timeout=10, transport=self._transport)
         return httpx.Client(timeout=10)
 
+    @classmethod
+    def mint_app_jwt(cls, app_id: str, private_key: str, *, now: int) -> str:
+        """Mint a short-lived RS256 GitHub App JWT.
+
+        Single home (DRY) for the App-JWT claims — used both by this client's
+        installation-token flow and by the offline config verifier. ``now`` is
+        injected (unix seconds) so callers/tests control the clock.
+        """
+        payload = {
+            "iat": now - cls.JWT_IAT_BACKDATE_SECONDS,
+            "exp": now + cls.JWT_EXPIRY_SECONDS,
+            "iss": app_id,
+        }
+        return pyjwt.encode(payload, private_key, algorithm="RS256")
+
     def _make_jwt(self) -> str:
         """Generate a short-lived JWT signed with the GitHub App private key."""
-        now = int(time.time())
-        payload = {"iat": now - 60, "exp": now + 540, "iss": self._app_id}
-        return pyjwt.encode(payload, self._private_key, algorithm="RS256")
+        return self.mint_app_jwt(self._app_id, self._private_key, now=int(time.time()))
 
     def _ensure_installation_token(self) -> None:
         """Fetch a fresh installation token if not already set."""
