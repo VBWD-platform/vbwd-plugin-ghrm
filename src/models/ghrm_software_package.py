@@ -19,6 +19,13 @@ DEFAULT_COLLABORATOR_PERMISSION = "pull"
 ALLOWED_PACKAGE_KINDS = ("single", "bundle")
 DEFAULT_PACKAGE_KIND = "single"
 
+# S132: how a package grants access. ``repo`` reproduces today's per-repo
+# collaborator behaviour byte-for-byte (default); ``team`` maps the package to
+# ONE GitHub team so a developer accepts at most one org invitation. The ``org``
+# kind is deliberately NOT implemented this pass (see access_target.py).
+ALLOWED_ACCESS_KINDS = ("repo", "team")
+DEFAULT_ACCESS_KIND = "repo"
+
 
 def _dedupe(pairs: Iterable[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """Return the pairs with duplicates removed, preserving first-seen order."""
@@ -94,6 +101,17 @@ class GhrmSoftwarePackage(BaseModel):
         server_default=DEFAULT_PACKAGE_KIND,
     )
     bundle_repos = db.Column(db.JSON, nullable=False, default=list, server_default="[]")
+    # S132: access-kind seam. ``repo`` (default) keeps the per-repo collaborator
+    # grant; ``team`` maps the package to one GitHub team. ``github_org`` and
+    # ``github_team_slug`` are only meaningful for the ``team`` kind.
+    access_kind = db.Column(
+        db.String(16),
+        nullable=False,
+        default=DEFAULT_ACCESS_KIND,
+        server_default=DEFAULT_ACCESS_KIND,
+    )
+    github_org = db.Column(db.String(128), nullable=True)
+    github_team_slug = db.Column(db.String(128), nullable=True)
 
     def repo_targets(self) -> List[Tuple[str, str]]:
         """The ``(owner, repo)`` pairs a grant must cover (the only repo seam).
@@ -107,6 +125,19 @@ class GhrmSoftwarePackage(BaseModel):
                 (entry["owner"], entry["repo"]) for entry in (self.bundle_repos or [])
             )
         return [(self.github_owner, self.github_repo)]
+
+    def access_targets(self) -> list:
+        """The polymorphic access targets a grant must cover (S132 seam).
+
+        Generalises ``repo_targets()``: a ``team`` package resolves to one
+        ``TeamTarget``; every other kind resolves to a ``RepoTarget`` per repo
+        (single/bundle unchanged). Delegates to the single mapping home in
+        ``access_target`` (imported lazily to avoid a model<->service import
+        cycle) so grant/revoke never branch on kind.
+        """
+        from plugins.ghrm.src.services.access_target import access_targets_for_package
+
+        return access_targets_for_package(self)
 
     def to_dict(self) -> dict:
         return {
@@ -132,6 +163,9 @@ class GhrmSoftwarePackage(BaseModel):
             "collaborator_permission": self.collaborator_permission,
             "package_kind": self.package_kind,
             "bundle_repos": self.bundle_repos,
+            "access_kind": self.access_kind,
+            "github_org": self.github_org,
+            "github_team_slug": self.github_team_slug,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -20,6 +20,13 @@ DEFAULT_CONFIG = {
     "software_detail_cms_layout_slug": "ghrm-software-detail",
     "grace_period_fallback_days": 7,
     "allow_extensive_github_permissions": False,
+    # S132: org/team access model. ``github_org`` is the GitHub org that team
+    # packages live under; ``default_access_kind`` is the kind a newly created
+    # package defaults to. Both are model/admin-level (a package carries its own
+    # ``access_kind``/``github_org``/``github_team_slug``), so they are NOT wired
+    # into the runtime grant path — the service reads the package's own columns.
+    "github_org": "",
+    "default_access_kind": "repo",
     # Vendor-mode (marketplace): gates the self-service vendor package route.
     # Off by default so a classic install (admin-only packages) is unchanged.
     "marketplace_enabled": False,

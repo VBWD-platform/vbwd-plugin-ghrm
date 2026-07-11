@@ -10,6 +10,8 @@ from plugins.ghrm.src.models.ghrm_software_package import (
     DEFAULT_COLLABORATOR_PERMISSION,
     ALLOWED_PACKAGE_KINDS,
     DEFAULT_PACKAGE_KIND,
+    ALLOWED_ACCESS_KINDS,
+    DEFAULT_ACCESS_KIND,
 )
 from plugins.ghrm.src.models.ghrm_software_sync import GhrmSoftwareSync
 from plugins.ghrm.src.repositories.software_package_repository import (
@@ -97,6 +99,44 @@ def validate_package_kind(value: Optional[str]) -> str:
     return value
 
 
+def validate_access_kind(value: Optional[str]) -> str:
+    """Validate and normalise a package's access kind (S132).
+
+    Returns the default ``"repo"`` when omitted (``None``); raises
+    :class:`GhrmValidationError` for anything outside
+    :data:`ALLOWED_ACCESS_KINDS`. Single validation home reused by admin create
+    and update (``access_kind`` is an operator-level decision — never exposed on
+    the vendor routes). Mirrors :func:`validate_package_kind`.
+    """
+    if value is None:
+        return DEFAULT_ACCESS_KIND
+    if value not in ALLOWED_ACCESS_KINDS:
+        allowed = ", ".join(ALLOWED_ACCESS_KINDS)
+        raise GhrmValidationError(
+            f"Invalid access_kind '{value}'. Must be one of: {allowed}"
+        )
+    return value
+
+
+def validate_team_fields(
+    kind: str, github_org: Optional[str], github_team_slug: Optional[str]
+) -> None:
+    """Require a non-blank org + team slug when the effective kind is ``team``.
+
+    Only meaningful for the ``team`` access kind: a team grant maps the package
+    to ONE GitHub team, so both the org and the team slug must be present.
+    Raises :class:`GhrmValidationError` when either is blank. A no-op for the
+    ``repo`` kind (org/slug stay optional/nullable).
+    """
+    if kind != "team":
+        return
+    if not (github_org or "").strip() or not (github_team_slug or "").strip():
+        raise GhrmValidationError(
+            "A team access package requires a non-blank github_org and "
+            "github_team_slug."
+        )
+
+
 def validate_bundle_repos(value: Any, *, kind: str) -> List[Dict[str, str]]:
     """Validate and normalise a package's curated bundle repo list (S59, D2).
 
@@ -172,8 +212,12 @@ class SoftwarePackageService:
         tags_by_id = self._package_repo.list_package_tags(
             [package.id for package in packages]
         )
+        prices_by_plan = self._package_repo.list_package_prices(
+            [package.tariff_plan_id for package in packages]
+        )
         result["items"] = [
-            self._package_dict_with_tags(package, tags_by_id) for package in packages
+            self._package_dict_with_tags(package, tags_by_id, prices_by_plan)
+            for package in packages
         ]
         return result
 
@@ -205,9 +249,17 @@ class SoftwarePackageService:
         return [tag for tag in catalog if tag.get("slug") in used_slugs]
 
     @staticmethod
-    def _package_dict_with_tags(package, tags_by_id) -> Dict[str, Any]:
+    def _package_dict_with_tags(
+        package, tags_by_id, prices_by_plan=None
+    ) -> Dict[str, Any]:
         data = package.to_dict()
         data["tags"] = tags_by_id.get(package.id, [])
+        prices_by_plan = prices_by_plan or {}
+        data["price"] = (
+            prices_by_plan.get(str(package.tariff_plan_id))
+            if package.tariff_plan_id
+            else None
+        )
         return data
 
     def get_package(self, slug: str) -> Dict[str, Any]:
@@ -243,6 +295,10 @@ class SoftwarePackageService:
             data["latest_version"] = None
             data["latest_released_at"] = None
             data["last_synced_at"] = None
+        prices_by_plan = self._package_repo.list_package_prices([pkg.tariff_plan_id])
+        data["price"] = (
+            prices_by_plan.get(str(pkg.tariff_plan_id)) if pkg.tariff_plan_id else None
+        )
         return data
 
     def get_related(self, slug: str) -> List[Dict[str, Any]]:

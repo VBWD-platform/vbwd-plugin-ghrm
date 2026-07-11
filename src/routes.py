@@ -81,6 +81,8 @@ from plugins.ghrm.src.services.software_package_service import (
     validate_collaborator_permission,
     validate_package_kind,
     validate_bundle_repos,
+    validate_access_kind,
+    validate_team_fields,
 )
 from plugins.ghrm.src.services.github_access_service import (
     GithubAccessService,
@@ -1160,6 +1162,12 @@ def admin_create_package():
         bundle_repos = validate_bundle_repos(
             body.get("bundle_repos"), kind=package_kind
         )
+        # S132: access_kind is an operator-level decision (admin routes only).
+        # A ``team`` package requires a non-blank github_org + github_team_slug.
+        access_kind = validate_access_kind(body.get("access_kind"))
+        github_org = body.get("github_org")
+        github_team_slug = body.get("github_team_slug")
+        validate_team_fields(access_kind, github_org, github_team_slug)
     except GhrmValidationError as exc:
         return jsonify({"error": str(exc)}), 400
     pkg = GhrmSoftwarePackage(
@@ -1178,6 +1186,9 @@ def admin_create_package():
         collaborator_permission=collaborator_permission,
         package_kind=package_kind,
         bundle_repos=bundle_repos,
+        access_kind=access_kind,
+        github_org=github_org,
+        github_team_slug=github_team_slug,
     )
     repo.save(pkg)
     return (
@@ -1233,6 +1244,8 @@ def admin_update_package(pkg_id):
         "related_slugs",
         "sort_order",
         "is_active",
+        "github_org",
+        "github_team_slug",
     )
     for field in updatable:
         if field in body:
@@ -1269,6 +1282,17 @@ def admin_update_package(pkg_id):
                 body["bundle_repos"] if "bundle_repos" in body else pkg.bundle_repos,
                 kind=pkg.package_kind,
             )
+        except GhrmValidationError as exc:
+            return jsonify({"error": str(exc)}), 400
+    # S132: access_kind (operator-level, admin routes only). Validate the value
+    # and enforce the team-requires-org+slug rule on the EFFECTIVE org/slug: the
+    # plain ``updatable`` loop above has already applied any supplied github_org/
+    # github_team_slug, so falling back to ``pkg``'s current column mirrors how
+    # ``_resolve_vendor_content_fields`` uses ``current_package``.
+    if "access_kind" in body:
+        try:
+            pkg.access_kind = validate_access_kind(body["access_kind"])
+            validate_team_fields(pkg.access_kind, pkg.github_org, pkg.github_team_slug)
         except GhrmValidationError as exc:
             return jsonify({"error": str(exc)}), 400
     # Sync overrides

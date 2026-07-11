@@ -10,5 +10,7 @@
   "software_detail_cms_page_slug": "ghrm-software-detail",
   "grace_period_fallback_days": 7,
   "allow_extensive_github_permissions": false,
+  "github_org": "",
+  "default_access_kind": "repo",
   "marketplace_enabled": false
 }

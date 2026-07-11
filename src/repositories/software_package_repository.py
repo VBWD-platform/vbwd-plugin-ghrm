@@ -62,6 +62,28 @@ class GhrmSoftwarePackageRepository:
         rows = query.all()
         return [row[0] for row in rows]
 
+    def list_package_prices(self, plan_ids: List[UUID]) -> Dict[str, Dict[str, Any]]:
+        """Price blocks for many tariff plans in ONE call, keyed by str(plan_id).
+
+        Resolved through the SAME subscription-owned catalog read model the rest
+        of this repo uses (ghrm declares ``dependencies=["subscription"]``; no
+        subscription model or pricing import here) — the read model runs each
+        plan through the core ``PriceFactory``. Falsy ids are dropped; an empty
+        set ⇒ ``{}``. Degrades to ``{}`` if the read model is unavailable so a
+        package simply carries no price rather than 500-ing the catalogue.
+        """
+        ids = [plan_id for plan_id in plan_ids if plan_id]
+        if not ids:
+            return {}
+        try:
+            from plugins.subscription.subscription.services.catalog_read_model import (
+                CatalogReadModel,
+            )
+
+            return CatalogReadModel().plan_prices_by_ids(ids)
+        except Exception:
+            return {}
+
     def list_applicable_package_tags(self) -> List[Dict[str, Any]]:
         """Catalog rows applicable to ghrm packages (slug + label/color/metadata).
 

@@ -33,6 +33,18 @@ class AddCollaboratorResult:
     invitation_id: Optional[str] = None
 
 
+@dataclass
+class TeamMembershipResult:
+    """Outcome of a ``PUT /orgs/{org}/teams/{team}/memberships/{user}`` call.
+
+    GitHub returns the membership ``state``: ``"pending"`` when the user is not
+    yet an org member (the single org invitation is now outstanding) and
+    ``"active"`` once they are an org member (instant — no per-team acceptance).
+    """
+
+    state: str  # "active" | "pending"
+
+
 class IGithubAppClient(ABC):
     """Interface for all GitHub API operations used by GHRM."""
 
@@ -58,6 +70,24 @@ class IGithubAppClient(ABC):
 
     @abstractmethod
     def cancel_invitation(self, owner: str, repo: str, invitation_id: str) -> None:
+        ...
+
+    @abstractmethod
+    def add_team_membership(
+        self, org: str, team_slug: str, username: str
+    ) -> TeamMembershipResult:
+        """Add a user to a team. ``pending`` (org invite outstanding) or ``active``."""
+        ...
+
+    @abstractmethod
+    def remove_team_membership(self, org: str, team_slug: str, username: str) -> bool:
+        ...
+
+    @abstractmethod
+    def get_team_membership(
+        self, org: str, team_slug: str, username: str
+    ) -> Optional[str]:
+        """Return ``"active"``/``"pending"`` team membership state, or None (404)."""
         ...
 
     @abstractmethod
@@ -135,6 +165,15 @@ class MockGithubAppClient(IGithubAppClient):
         # (owner, repo) -> list of {"id": ...} pending invitations.
         self.invitations: dict = {}
         self._next_invitation_id: int = 1000
+        # S132 team membership, same in-memory-set style as collaborators.
+        # ``org_members``: org -> set of usernames who ACCEPTED the org invite;
+        # a team membership is ``active`` once the user is an org member, else
+        # ``pending`` (mirroring GitHub, where the first team add creates one
+        # org invitation and subsequent team adds are instant).
+        self.org_members: dict = {}  # org -> set of usernames
+        self.team_memberships: dict = {}  # (org, team_slug) -> set of usernames
+        self.raise_on_add_team_membership: Optional[Exception] = None
+        self.raise_on_remove_team_membership: Optional[Exception] = None
 
     def add_collaborator(
         self, owner: str, repo: str, username: str, permission: str = "pull"
@@ -174,6 +213,28 @@ class MockGithubAppClient(IGithubAppClient):
             for item in self.invitations.get(key, [])
             if str(item["id"]) != str(invitation_id)
         ]
+
+    def add_team_membership(
+        self, org: str, team_slug: str, username: str
+    ) -> TeamMembershipResult:
+        if self.raise_on_add_team_membership:
+            raise self.raise_on_add_team_membership
+        self.team_memberships.setdefault((org, team_slug), set()).add(username)
+        state = "active" if username in self.org_members.get(org, set()) else "pending"
+        return TeamMembershipResult(state=state)
+
+    def remove_team_membership(self, org: str, team_slug: str, username: str) -> bool:
+        if self.raise_on_remove_team_membership:
+            raise self.raise_on_remove_team_membership
+        self.team_memberships.get((org, team_slug), set()).discard(username)
+        return True
+
+    def get_team_membership(
+        self, org: str, team_slug: str, username: str
+    ) -> Optional[str]:
+        if username not in self.team_memberships.get((org, team_slug), set()):
+            return None
+        return "active" if username in self.org_members.get(org, set()) else "pending"
 
     def get_installation_token(self, installation_id: str) -> str:
         return f"mock-installation-token-{installation_id}"

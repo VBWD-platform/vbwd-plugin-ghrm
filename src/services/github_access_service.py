@@ -31,6 +31,10 @@ from plugins.ghrm.src.repositories.software_package_repository import (
 from plugins.ghrm.src.services.github_app_client import IGithubAppClient
 from plugins.ghrm.src.services.github_app_client_real import GithubAppClientError
 from plugins.ghrm.src.services.ports import ISubscriptionEntitlements
+from plugins.ghrm.src.services.access_target import (
+    access_targets_for_package,
+    target_from_grant,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -226,8 +230,10 @@ class GithubAccessService:
             package = self._resolve_package(membership)
             if not package:
                 continue
-            if self._github.is_collaborator(
-                package.github_owner, package.github_repo, access.github_username
+            targets = access_targets_for_package(package)
+            if targets and all(
+                target.is_active(self._github, access.github_username)
+                for target in targets
             ):
                 self._membership_repo.upsert(
                     membership.user_id,
@@ -278,54 +284,42 @@ class GithubAccessService:
         access: GhrmUserGithubAccess,
         triggered_by: str,
     ) -> None:
-        """Single home for grant: add collaborator on every repo the package
-        resolves to (``repo_targets()`` — single or bundle) + upsert one
-        membership with per-repo ``repo_grants`` and a rolled-up row status (DRY).
+        """Single home for grant: dispatch over every access target the package
+        resolves to (``access_targets()`` — repo/bundle collaborators or one
+        team) + upsert one membership with per-target ``repo_grants`` entries and
+        a rolled-up row status (DRY). The service never branches on kind (OCP).
 
-        Per-repo ``GithubAppClientError`` is recorded in that repo's entry and
-        in ``last_error`` but never aborts the loop (best-effort). Any other
-        exception propagates. The rollup is ACTIVE when every repo is active,
-        else INVITED when any repo is pending, else ERROR.
+        Per-target ``GithubAppClientError`` is recorded in that target's entry
+        and in ``last_error`` but never aborts the loop (best-effort). Any other
+        exception propagates. The rollup is ACTIVE when every target is active,
+        else INVITED when any is pending, else ERROR.
         """
         permission = resolve_effective_permission(
             package, self._allow_extensive_permissions
         )
         repo_grants: list = []
         last_error: Optional[str] = None
-        for owner, repo in package.repo_targets():
+        for target in access_targets_for_package(package):
+            entry = dict(target.descriptor())
             try:
-                result = self._github.add_collaborator(
-                    owner, repo, access.github_username, permission
-                )
-                repo_status = (
+                result = target.grant(self._github, access.github_username, permission)
+                entry["status"] = (
                     MembershipStatus.ACTIVE.value
                     if result.state == "active"
                     else MembershipStatus.INVITED.value
                 )
-                repo_grants.append(
-                    {
-                        "owner": owner,
-                        "repo": repo,
-                        "status": repo_status,
-                        "invitation_id": result.invitation_id,
-                    }
-                )
+                entry["invitation_id"] = result.invitation_id
             except GithubAppClientError as exc:
                 last_error = str(exc)
-                repo_grants.append(
-                    {
-                        "owner": owner,
-                        "repo": repo,
-                        "status": MembershipStatus.ERROR.value,
-                        "invitation_id": None,
-                    }
-                )
+                entry["status"] = MembershipStatus.ERROR.value
+                entry["invitation_id"] = None
                 logger.warning(
-                    "[GHRM] add_collaborator failed for %s/%s: %s",
-                    owner,
-                    repo,
+                    "[GHRM] %s failed for %s: %s",
+                    target.grant_operation,
+                    target.location(),
                     exc,
                 )
+            repo_grants.append(entry)
 
         rolled_up_status = self._roll_up_status(repo_grants)
         representative_invitation_id = self._representative_invitation_id(
@@ -360,23 +354,28 @@ class GithubAccessService:
 
     @staticmethod
     def _representative_invitation_id(package: Any, repo_grants: list) -> Optional[str]:
-        """The representative repo's invitation id (display + back-compat)."""
+        """The representative repo's invitation id (display + back-compat).
+
+        For a ``team`` package no grant entry carries owner/repo, so this falls
+        through to the single team entry's invitation id (``None`` for teams).
+        """
         representative = (package.github_owner, package.github_repo)
         for grant in repo_grants:
-            if (grant["owner"], grant["repo"]) == representative:
+            if (grant.get("owner"), grant.get("repo")) == representative:
                 return grant.get("invitation_id")
         return repo_grants[0].get("invitation_id") if repo_grants else None
 
     def _tear_down_membership(
         self, access: GhrmUserGithubAccess, membership: Any, triggered_by: str
     ) -> None:
-        """Remove collaborator / cancel invite for every repo a membership grants.
+        """Revoke every access target a membership granted.
 
-        Loops the membership's recorded ``repo_grants`` (falling back to the
-        package's representative repo for legacy/empty rows). A repo still
-        covered by another live (ACTIVE/INVITED/GRACE) membership is SKIPPED
-        (D6 — no over-revoke). For each remaining repo an INVITED grant with an
-        invitation id is ``cancel_invitation``-d, otherwise ``remove_collaborator``.
+        Loops the membership's recorded ``repo_grants`` entries (falling back to
+        the package's representative repo for legacy/empty rows), reconstructs
+        each ``AccessTarget`` (legacy entries without ``"kind"`` read as repo),
+        and asks it to revoke. A target still covered by another live
+        (ACTIVE/INVITED/GRACE) membership is SKIPPED (D6 — no over-revoke),
+        computed over the set of access-target keys.
 
         Best-effort: a GitHub-side failure (e.g. the App lacks permission → 403)
         is logged and swallowed so the user's disconnect always completes.
@@ -384,27 +383,25 @@ class GithubAccessService:
         package = self._resolve_package(membership)
         if not package:
             return
-        still_entitled = self._repos_still_entitled(
+        still_entitled_keys = self._targets_still_entitled(
             str(membership.user_id), excluding=membership
         )
-        for owner, repo, status, invitation_id in self._tear_down_targets(
-            membership, package
-        ):
-            if (owner, repo) in still_entitled:
+        for entry in self._tear_down_entries(membership, package):
+            target = target_from_grant(entry)
+            if target.key() in still_entitled_keys:
                 continue
             try:
-                if status == MembershipStatus.INVITED.value and invitation_id:
-                    self._github.cancel_invitation(owner, repo, invitation_id)
-                else:
-                    self._github.remove_collaborator(
-                        owner, repo, access.github_username
-                    )
+                target.revoke(
+                    self._github,
+                    access.github_username,
+                    entry.get("status"),
+                    entry.get("invitation_id"),
+                )
             except GithubAppClientError as exc:
                 logger.warning(
-                    "[GHRM] tear-down (remove collaborator / cancel invite) failed "
-                    "for %s/%s: %s — continuing disconnect",
-                    owner,
-                    repo,
+                    "[GHRM] tear-down (revoke access) failed for %s: %s — "
+                    "continuing disconnect",
+                    target.location(),
                     exc,
                 )
                 continue
@@ -416,8 +413,8 @@ class GithubAccessService:
             )
 
     @staticmethod
-    def _tear_down_targets(membership: Any, package: Any) -> list:
-        """Per-repo ``(owner, repo, status, invitation_id)`` tuples to tear down.
+    def _tear_down_entries(membership: Any, package: Any) -> list:
+        """Per-target grant entries to tear down.
 
         Prefers the membership's recorded ``repo_grants``; falls back to the
         package's representative repo (with the row-level status/invitation) for
@@ -425,22 +422,15 @@ class GithubAccessService:
         """
         repo_grants = getattr(membership, "repo_grants", None) or []
         if repo_grants:
-            return [
-                (
-                    grant["owner"],
-                    grant["repo"],
-                    grant.get("status"),
-                    grant.get("invitation_id"),
-                )
-                for grant in repo_grants
-            ]
+            return list(repo_grants)
         return [
-            (
-                package.github_owner,
-                package.github_repo,
-                membership.status,
-                membership.invitation_id,
-            )
+            {
+                "kind": "repo",
+                "owner": package.github_owner,
+                "repo": package.github_repo,
+                "status": membership.status,
+                "invitation_id": membership.invitation_id,
+            }
         ]
 
     _LIVE_STATUSES = (
@@ -449,10 +439,10 @@ class GithubAccessService:
         MembershipStatus.GRACE.value,
     )
 
-    def _repos_still_entitled(self, user_id: str, *, excluding: Any) -> set:
-        """Repos the user is still entitled to via OTHER live memberships (D6).
+    def _targets_still_entitled(self, user_id: str, *, excluding: Any) -> set:
+        """Access-target keys the user still holds via OTHER live memberships (D6).
 
-        Pure read: the union of ``repo_targets()`` over the user's other
+        Pure read: the union of ``access_targets()`` keys over the user's other
         memberships in {ACTIVE, INVITED, GRACE}. No GitHub calls.
         """
         excluded_id = getattr(excluding, "id", None)
@@ -470,7 +460,9 @@ class GithubAccessService:
             package = self._resolve_package(membership)
             if not package:
                 continue
-            still_entitled.update(package.repo_targets())
+            still_entitled.update(
+                target.key() for target in access_targets_for_package(package)
+            )
         return still_entitled
 
     def _resolve_package(self, membership: Any) -> Optional[Any]:

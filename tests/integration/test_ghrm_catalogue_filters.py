@@ -444,3 +444,81 @@ class TestTagsEndpointCategoryAware:
 
         assert response.status_code == 200
         assert spy.get_tags_bulk.call_count == 1
+
+
+def _seed_default_currency(db) -> None:
+    """Re-seed the EUR catalog row the core ``PriceFactory`` needs.
+
+    Plugin integration tests truncate the shared catalog between tests, so the
+    baseline currency row is created here through the model (never raw SQL),
+    mirroring the subscription plugin's conftest.
+    """
+    from decimal import Decimal
+
+    from vbwd.models.currency import Currency
+
+    if not db.session.query(Currency).filter_by(code="EUR").first():
+        db.session.add(
+            Currency(
+                code="EUR",
+                name="Euro",
+                symbol="€",
+                exchange_rate=Decimal("1.0"),
+                decimal_places=2,
+            )
+        )
+        db.session.commit()
+
+
+class TestListItemPrice:
+    """Each catalogue item carries its linked plan's price block (S-price)."""
+
+    def test_each_item_carries_price_block(self, app, db, client):
+        _seed_default_currency(db)
+        package = _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}")  # plan price 9.0
+        db.session.commit()
+
+        items = client.get("/api/v1/ghrm/packages?per_page=100").get_json()["items"]
+        match = next(item for item in items if item["slug"] == package.slug)
+
+        assert match["price"] is not None
+        assert match["price"]["price"]["currency"]  # resolved (e.g. EUR)
+        assert float(match["price"]["gross_amount"]) == 9.0
+        assert match["price"]["billing_period"] == "MONTHLY"
+
+    def test_zero_priced_plan_yields_free_block(self, app, db, client):
+        _seed_default_currency(db)
+        package = _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}")
+        db.session.get(TarifPlan, package.tariff_plan_id).price = None  # -> raw 0.0
+        db.session.commit()
+
+        items = client.get("/api/v1/ghrm/packages?per_page=100").get_json()["items"]
+        match = next(item for item in items if item["slug"] == package.slug)
+
+        # an unpriced plan resolves to a valid 0.00 block (rendered as "Free"),
+        # not a missing price
+        assert match["price"] is not None
+        assert float(match["price"]["gross_amount"]) == 0.0
+
+    def test_prices_use_one_bulk_call(self, app, db, client, monkeypatch):
+        _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}")
+        _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}")
+        db.session.commit()
+
+        from plugins.subscription.subscription.services.catalog_read_model import (
+            CatalogReadModel,
+        )
+
+        calls = {"count": 0}
+        real = CatalogReadModel.plan_prices_by_ids
+
+        def _spy(self, plan_ids):
+            calls["count"] += 1
+            return real(self, plan_ids)
+
+        monkeypatch.setattr(CatalogReadModel, "plan_prices_by_ids", _spy)
+
+        response = client.get("/api/v1/ghrm/packages?per_page=100")
+
+        assert response.status_code == 200
+        assert calls["count"] == 1  # one bulk call for the whole page, no N+1

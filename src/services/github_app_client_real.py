@@ -8,6 +8,7 @@ from plugins.ghrm.src.services.github_app_client import (
     IGithubAppClient,
     ReleaseDTO,
     ReleaseAsset,
+    TeamMembershipResult,
 )
 
 
@@ -169,6 +170,56 @@ class GithubAppClient(IGithubAppClient):
             raise GithubAppClientError(
                 f"cancel_invitation failed: {resp.status_code} {resp.text}"
             )
+
+    def add_team_membership(
+        self, org: str, team_slug: str, username: str
+    ) -> TeamMembershipResult:
+        """Add/update a user's team membership.
+
+        ``PUT /orgs/{org}/teams/{team_slug}/memberships/{username}`` returns the
+        membership ``state`` (``"pending"`` until the user accepts the org
+        invitation, else ``"active"``). Any non-2xx raises.
+        """
+        url = (
+            f"{self.GITHUB_API}/orgs/{org}/teams/{team_slug}/" f"memberships/{username}"
+        )
+        with self._client() as client:
+            resp = client.put(url, headers=self._repo_headers())
+        if 200 <= resp.status_code < 300:
+            return TeamMembershipResult(state=resp.json().get("state", "pending"))
+        raise GithubAppClientError(
+            f"add_team_membership failed: {resp.status_code} {resp.text}"
+        )
+
+    def remove_team_membership(self, org: str, team_slug: str, username: str) -> bool:
+        """Remove a user from a team; 204 (removed) and 404 (gone) are ok."""
+        url = (
+            f"{self.GITHUB_API}/orgs/{org}/teams/{team_slug}/" f"memberships/{username}"
+        )
+        with self._client() as client:
+            resp = client.delete(url, headers=self._repo_headers())
+        if resp.status_code not in (204, 404):
+            raise GithubAppClientError(
+                f"remove_team_membership failed: {resp.status_code} {resp.text}"
+            )
+        return True
+
+    def get_team_membership(
+        self, org: str, team_slug: str, username: str
+    ) -> Optional[str]:
+        """Return the team membership state (``"active"``/``"pending"``) or None."""
+        url = (
+            f"{self.GITHUB_API}/orgs/{org}/teams/{team_slug}/" f"memberships/{username}"
+        )
+        with self._client() as client:
+            resp = client.get(url, headers=self._repo_headers())
+        if resp.status_code == 404:
+            return None
+        if resp.status_code == 200:
+            return resp.json().get("state")
+        raise GithubAppClientError(
+            f"get_team_membership failed: {resp.status_code} {resp.text}"
+        )
 
     def get_installation_token(self, installation_id: str) -> str:
         """Get a fresh installation token from GitHub App using a signed JWT."""
