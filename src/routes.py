@@ -1237,6 +1237,19 @@ def admin_update_package(pkg_id):
     for field in updatable:
         if field in body:
             setattr(pkg, field, body[field])
+    # tariff_plan_id is handled apart from ``updatable`` because it is the
+    # UNIQUE 1:1 plan link: an empty value ("" or null) unlinks, and a plan
+    # already held by a DIFFERENT package is a 409 conflict (re-sending the
+    # package's own current plan is idempotent, not a conflict).
+    if "tariff_plan_id" in body:
+        requested_plan_id = body["tariff_plan_id"]
+        if requested_plan_id in (None, ""):
+            pkg.tariff_plan_id = None
+        else:
+            existing = repo.find_by_tariff_plan_id(requested_plan_id)
+            if existing is not None and str(existing.id) != str(pkg.id):
+                return jsonify({"error": "Tariff plan already linked"}), 409
+            pkg.tariff_plan_id = requested_plan_id
     if "collaborator_permission" in body:
         allow_extensive = bool(_cfg().get("allow_extensive_github_permissions", False))
         try:
