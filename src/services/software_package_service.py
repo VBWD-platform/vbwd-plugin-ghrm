@@ -177,6 +177,33 @@ class SoftwarePackageService:
         ]
         return result
 
+    def list_package_tag_options(
+        self, category_slug: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Catalogue tag-filter options: tags used by at least one ACTIVE package.
+
+        The filter must only offer tags that can actually filter something, so a
+        globally-defined tag (e.g. a blog/news tag) that no active ghrm package
+        carries is dropped. When ``category_slug`` is given the used-tag set is
+        scoped to the ACTIVE packages IN that category (same category→package
+        resolution the list path uses), so the filter mirrors what a
+        category-filtered catalogue can actually show; absent/blank ⇒ all active
+        packages (unchanged). The used-slug set comes from ONE bulk tag call over
+        those packages (D6, no N+1); surviving catalog rows keep their display
+        metadata and order. Degrades to ``[]`` when there are no active packages
+        (including an unknown/empty category), none are tagged, or the tags port
+        is unavailable — never a 500.
+        """
+        active_ids = self._package_repo.list_active_package_ids(category_slug)
+        if not active_ids:
+            return []
+        tags_by_id = self._package_repo.list_package_tags(active_ids)
+        used_slugs = {slug for slugs in tags_by_id.values() for slug in slugs}
+        if not used_slugs:
+            return []
+        catalog = self._package_repo.list_applicable_package_tags()
+        return [tag for tag in catalog if tag.get("slug") in used_slugs]
+
     @staticmethod
     def _package_dict_with_tags(package, tags_by_id) -> Dict[str, Any]:
         data = package.to_dict()

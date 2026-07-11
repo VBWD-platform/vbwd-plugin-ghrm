@@ -36,6 +36,47 @@ class GhrmSoftwarePackageRepository:
         except UnknownEntityTypeError:
             return {}
 
+    def list_active_package_ids(
+        self, category_slug: Optional[str] = None
+    ) -> List[UUID]:
+        """Ids of ACTIVE software packages, optionally scoped to one category.
+
+        When ``category_slug`` is given the ids are restricted to packages whose
+        linked tariff plan sits in that category — resolved through the SAME
+        subscription-owned catalog read model the list path (:meth:`find_all`)
+        uses (ghrm declares ``dependencies=["subscription"]``; no subscription
+        model import here). An unknown/empty category resolves to no plan ids, so
+        ``in_([])`` matches nothing and the result is empty. Absent/blank ⇒ every
+        active package (the catalogue tag-option source, unchanged).
+        """
+        query = self.session.query(GhrmSoftwarePackage.id).filter(
+            GhrmSoftwarePackage.is_active.is_(True)
+        )
+        if category_slug:
+            from plugins.subscription.subscription.services.catalog_read_model import (
+                CatalogReadModel,
+            )
+
+            plan_ids = CatalogReadModel().plan_ids_in_category(category_slug)
+            query = query.filter(GhrmSoftwarePackage.tariff_plan_id.in_(plan_ids))
+        rows = query.all()
+        return [row[0] for row in rows]
+
+    def list_applicable_package_tags(self) -> List[Dict[str, Any]]:
+        """Catalog rows applicable to ghrm packages (slug + label/color/metadata).
+
+        Reads through the core tags port only (agnostic). Degrades to an empty
+        list under the SAME guard as :meth:`list_package_tags` (no provider or
+        the ``ghrm_software_package`` entity type unregistered) — never a 500.
+        """
+        provider = resolve_tags_and_custom_fields()
+        if provider is None:
+            return []
+        try:
+            return provider.list_applicable_tags(_GHRM_PACKAGE_ENTITY_TYPE)
+        except UnknownEntityTypeError:
+            return []
+
     def find_by_slug(self, slug: str) -> Optional[GhrmSoftwarePackage]:
         return (
             self.session.query(GhrmSoftwarePackage)

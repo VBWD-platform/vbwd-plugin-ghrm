@@ -128,6 +128,103 @@ class TestListPackages:
         package_repo.list_package_tags.assert_called_once_with(["pkg-1"])
 
 
+class TestListPackageTagOptions:
+    """The catalogue tag-filter options: only tags used by an ACTIVE package."""
+
+    def test_returns_only_tags_used_by_active_packages(self):
+        """A tag on an active package is offered; a global unused tag is dropped."""
+        package_repo = MagicMock()
+        package_repo.list_active_package_ids.return_value = ["pkg-1"]
+        package_repo.list_package_tags.return_value = {"pkg-1": ["vue"]}
+        package_repo.list_applicable_package_tags.return_value = [
+            {"slug": "vue", "name": "Vue"},
+            {"slug": "blog", "name": "Blog"},
+        ]
+
+        svc = _make_service(package_repo=package_repo)
+        result = svc.list_package_tag_options()
+
+        assert [tag["slug"] for tag in result] == ["vue"]
+
+    def test_preserves_catalog_metadata_and_order(self):
+        """Filtering keeps each surviving row's metadata and the catalog order."""
+        package_repo = MagicMock()
+        package_repo.list_active_package_ids.return_value = ["pkg-1"]
+        package_repo.list_package_tags.return_value = {"pkg-1": ["vue", "cli"]}
+        package_repo.list_applicable_package_tags.return_value = [
+            {"slug": "cli", "name": "CLI", "color": "#111"},
+            {"slug": "blog", "name": "Blog"},
+            {"slug": "vue", "name": "Vue", "color": "#42b"},
+        ]
+
+        svc = _make_service(package_repo=package_repo)
+        result = svc.list_package_tag_options()
+
+        assert result == [
+            {"slug": "cli", "name": "CLI", "color": "#111"},
+            {"slug": "vue", "name": "Vue", "color": "#42b"},
+        ]
+
+    def test_uses_one_bulk_tag_call_no_n_plus_one(self):
+        """Tags for every active package come from ONE bulk call (no N+1)."""
+        package_repo = MagicMock()
+        package_repo.list_active_package_ids.return_value = ["pkg-1", "pkg-2"]
+        package_repo.list_package_tags.return_value = {"pkg-1": ["vue"]}
+        package_repo.list_applicable_package_tags.return_value = [
+            {"slug": "vue", "name": "Vue"},
+        ]
+
+        svc = _make_service(package_repo=package_repo)
+        svc.list_package_tag_options()
+
+        package_repo.list_package_tags.assert_called_once_with(["pkg-1", "pkg-2"])
+
+    def test_empty_when_no_active_packages(self):
+        """No active packages ⇒ no options, and no tag call is made."""
+        package_repo = MagicMock()
+        package_repo.list_active_package_ids.return_value = []
+
+        svc = _make_service(package_repo=package_repo)
+
+        assert svc.list_package_tag_options() == []
+        package_repo.list_package_tags.assert_not_called()
+
+    def test_empty_when_no_active_package_is_tagged(self):
+        """Active packages exist but none carry a tag ⇒ no options."""
+        package_repo = MagicMock()
+        package_repo.list_active_package_ids.return_value = ["pkg-1"]
+        package_repo.list_package_tags.return_value = {}
+
+        svc = _make_service(package_repo=package_repo)
+
+        assert svc.list_package_tag_options() == []
+        package_repo.list_applicable_package_tags.assert_not_called()
+
+    def test_threads_category_slug_to_active_ids(self):
+        """A category scopes the used-tag set to that category's active packages."""
+        package_repo = MagicMock()
+        package_repo.list_active_package_ids.return_value = ["pkg-1"]
+        package_repo.list_package_tags.return_value = {"pkg-1": ["vue"]}
+        package_repo.list_applicable_package_tags.return_value = [
+            {"slug": "vue", "name": "Vue"},
+        ]
+
+        svc = _make_service(package_repo=package_repo)
+        svc.list_package_tag_options(category_slug="backend")
+
+        package_repo.list_active_package_ids.assert_called_once_with("backend")
+
+    def test_default_passes_no_category(self):
+        """With no category the active-ids query is unscoped (None)."""
+        package_repo = MagicMock()
+        package_repo.list_active_package_ids.return_value = []
+
+        svc = _make_service(package_repo=package_repo)
+        svc.list_package_tag_options()
+
+        package_repo.list_active_package_ids.assert_called_once_with(None)
+
+
 class TestGetPackage:
     def test_merges_override_readme_over_cached(self):
         """When override_readme is set, get_package returns it instead of cached_readme."""

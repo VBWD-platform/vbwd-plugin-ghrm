@@ -57,7 +57,9 @@ def _make_plan(db) -> TarifPlan:
     return plan
 
 
-def _make_package(db, slug: str, *, kind: str = "single") -> GhrmSoftwarePackage:
+def _make_package(
+    db, slug: str, *, kind: str = "single", is_active: bool = True
+) -> GhrmSoftwarePackage:
     plan = _make_plan(db)
     package = GhrmSoftwarePackage(
         tariff_plan_id=plan.id,
@@ -68,7 +70,7 @@ def _make_package(db, slug: str, *, kind: str = "single") -> GhrmSoftwarePackage
         github_installation_id="install-123",
         package_kind=kind,
         bundle_repos=([{"owner": "acme", "repo": slug}] if kind == "bundle" else []),
-        is_active=True,
+        is_active=is_active,
     )
     db.session.add(package)
     db.session.flush()
@@ -287,7 +289,7 @@ class TestListItemTags:
 
 
 class TestTagsEndpoint:
-    def test_lists_applicable_tags(self, app, db, client):
+    def test_lists_tags_used_by_an_active_package(self, app, db, client):
         tag = f"vue-{uuid.uuid4().hex[:8]}"
         package = _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}")
         db.session.commit()
@@ -298,3 +300,147 @@ class TestTagsEndpoint:
         assert response.status_code == 200
         slugs = {row["slug"] for row in response.get_json()["tags"]}
         assert tag in slugs
+
+    def test_excludes_tag_only_on_an_inactive_package(self, app, db, client):
+        """A global tag carried only by an INACTIVE package is not offered."""
+        tag = f"inactive-{uuid.uuid4().hex[:8]}"
+        package = _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}", is_active=False)
+        db.session.commit()
+        # set_tags auto-creates the slug as a GLOBAL catalog tag (so it WOULD
+        # appear in list_applicable_tags), yet only an inactive package uses it.
+        _tag(app, package, [tag])
+
+        response = client.get("/api/v1/ghrm/tags")
+
+        assert response.status_code == 200
+        slugs = {row["slug"] for row in response.get_json()["tags"]}
+        assert tag not in slugs
+
+    def test_offers_used_tag_but_not_a_global_unused_one(self, app, db, client):
+        """Only tags on an active package survive; a global unused tag drops."""
+        used_tag = f"used-{uuid.uuid4().hex[:8]}"
+        unused_tag = f"unused-{uuid.uuid4().hex[:8]}"
+        active = _make_package(db, f"active-{uuid.uuid4().hex[:8]}")
+        inactive = _make_package(
+            db, f"inactive-{uuid.uuid4().hex[:8]}", is_active=False
+        )
+        db.session.commit()
+        _tag(app, active, [used_tag])
+        _tag(app, inactive, [unused_tag])
+
+        response = client.get("/api/v1/ghrm/tags")
+
+        assert response.status_code == 200
+        slugs = {row["slug"] for row in response.get_json()["tags"]}
+        assert used_tag in slugs
+        assert unused_tag not in slugs
+
+    def test_uses_one_bulk_get_tags_bulk_call(self, app, db, client, monkeypatch):
+        """Options are built from ONE bulk tag call over the active packages."""
+        package = _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}")
+        db.session.commit()
+        _tag(app, package, [f"vue-{uuid.uuid4().hex[:8]}"])
+
+        real_provider = repo_module.resolve_tags_and_custom_fields()
+        spy = MagicMock(wraps=real_provider)
+        monkeypatch.setattr(repo_module, "resolve_tags_and_custom_fields", lambda: spy)
+
+        response = client.get("/api/v1/ghrm/tags")
+
+        assert response.status_code == 200
+        assert spy.get_tags_bulk.call_count == 1
+
+
+class TestTagsEndpointCategoryAware:
+    """``GET /ghrm/tags?category_slug=`` scopes options to that category (S127)."""
+
+    def _category(self, db, slug: str) -> TarifPlanCategory:
+        category = TarifPlanCategory(name=f"Cat {slug}", slug=slug)
+        db.session.add(category)
+        db.session.flush()
+        return category
+
+    def _attach(self, db, category, package) -> None:
+        category.tarif_plans.append(db.session.get(TarifPlan, package.tariff_plan_id))
+
+    def _tag_slugs(self, response) -> set:
+        return {row["slug"] for row in response.get_json()["tags"]}
+
+    def test_category_scopes_options_to_that_category(self, app, db, client):
+        cat_a = self._category(db, f"cata-{uuid.uuid4().hex[:8]}")
+        cat_b = self._category(db, f"catb-{uuid.uuid4().hex[:8]}")
+        tag_a = f"taga-{uuid.uuid4().hex[:8]}"
+        tag_b = f"tagb-{uuid.uuid4().hex[:8]}"
+        pkg_a = _make_package(db, f"pkga-{uuid.uuid4().hex[:8]}")
+        pkg_b = _make_package(db, f"pkgb-{uuid.uuid4().hex[:8]}")
+        self._attach(db, cat_a, pkg_a)
+        self._attach(db, cat_b, pkg_b)
+        db.session.commit()
+        _tag(app, pkg_a, [tag_a])
+        _tag(app, pkg_b, [tag_b])
+
+        in_a = self._tag_slugs(
+            client.get(f"/api/v1/ghrm/tags?category_slug={cat_a.slug}")
+        )
+        in_b = self._tag_slugs(
+            client.get(f"/api/v1/ghrm/tags?category_slug={cat_b.slug}")
+        )
+
+        assert tag_a in in_a
+        assert tag_a not in in_b
+        assert tag_b in in_b
+        assert tag_b not in in_a
+
+    def test_no_category_returns_union(self, app, db, client):
+        cat_a = self._category(db, f"cata-{uuid.uuid4().hex[:8]}")
+        tag_in_cat = f"incat-{uuid.uuid4().hex[:8]}"
+        tag_no_cat = f"nocat-{uuid.uuid4().hex[:8]}"
+        pkg_in = _make_package(db, f"pkgin-{uuid.uuid4().hex[:8]}")
+        pkg_out = _make_package(db, f"pkgout-{uuid.uuid4().hex[:8]}")
+        self._attach(db, cat_a, pkg_in)
+        db.session.commit()
+        _tag(app, pkg_in, [tag_in_cat])
+        _tag(app, pkg_out, [tag_no_cat])
+
+        slugs = self._tag_slugs(client.get("/api/v1/ghrm/tags"))
+
+        assert tag_in_cat in slugs
+        assert tag_no_cat in slugs
+
+    def test_unknown_category_returns_empty(self, app, db, client):
+        package = _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}")
+        db.session.commit()
+        _tag(app, package, [f"vue-{uuid.uuid4().hex[:8]}"])
+
+        response = client.get(
+            f"/api/v1/ghrm/tags?category_slug=nope-{uuid.uuid4().hex[:8]}"
+        )
+
+        assert response.status_code == 200
+        assert response.get_json()["tags"] == []
+
+    def test_empty_category_param_behaves_as_unscoped(self, app, db, client):
+        tag = f"vue-{uuid.uuid4().hex[:8]}"
+        package = _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}")
+        db.session.commit()
+        _tag(app, package, [tag])
+
+        slugs = self._tag_slugs(client.get("/api/v1/ghrm/tags?category_slug="))
+
+        assert tag in slugs
+
+    def test_category_scoped_uses_one_bulk_call(self, app, db, client, monkeypatch):
+        category = self._category(db, f"cat-{uuid.uuid4().hex[:8]}")
+        package = _make_package(db, f"pkg-{uuid.uuid4().hex[:8]}")
+        self._attach(db, category, package)
+        db.session.commit()
+        _tag(app, package, [f"vue-{uuid.uuid4().hex[:8]}"])
+
+        real_provider = repo_module.resolve_tags_and_custom_fields()
+        spy = MagicMock(wraps=real_provider)
+        monkeypatch.setattr(repo_module, "resolve_tags_and_custom_fields", lambda: spy)
+
+        response = client.get(f"/api/v1/ghrm/tags?category_slug={category.slug}")
+
+        assert response.status_code == 200
+        assert spy.get_tags_bulk.call_count == 1

@@ -397,17 +397,19 @@ def list_packages():
 
 @ghrm_bp.route("/api/v1/ghrm/tags", methods=["GET"])
 def list_package_tags():
-    """Return the tags applicable to GHRM software packages (widget filter opts).
+    """Return the tags USED by at least one active GHRM package (filter opts).
 
-    Public read — feeds the catalogue widget's tag-filter options via the core
-    tags port (the same generic seam the detail/list paths use).
+    Public read — feeds the catalogue widget's tag-filter options. Only tags
+    actually attached to an active package are offered, so the filter never
+    lists a tag that would match nothing (e.g. blog/news tags defined globally).
+    The optional ``category_slug`` query param (same name/semantics as
+    ``/ghrm/packages``) scopes the options to the active packages in that
+    category; absent/empty ⇒ every active package.
     """
-    from vbwd.services.tags_and_custom_fields import resolve_tags_and_custom_fields
-
-    tags = resolve_tags_and_custom_fields().list_applicable_tags(
-        "ghrm_software_package"
+    category_slug = request.args.get("category_slug") or None
+    return jsonify(
+        {"tags": _pkg_svc().list_package_tag_options(category_slug=category_slug)}
     )
-    return jsonify({"tags": tags})
 
 
 @ghrm_bp.route("/api/v1/ghrm/packages/<slug>", methods=["GET"])
