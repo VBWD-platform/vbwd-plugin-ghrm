@@ -84,6 +84,7 @@ class GhrmPlugin(BasePlugin):
         return PublicRouteDeclaration(
             read={
                 "/api/v1/ghrm/categories": "Public GHRM marketplace category listing.",
+                "/api/v1/ghrm/tags": "Public GHRM marketplace package-tag listing.",
                 "/api/v1/ghrm/config": "Public GHRM marketplace config for the storefront.",
                 "/api/v1/ghrm/packages": "Public GHRM software-package listing.",
                 "/api/v1/ghrm/packages/<slug>": "Public single GHRM package detail.",
