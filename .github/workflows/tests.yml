@@ -34,6 +34,14 @@ jobs:
           repository: VBWD-platform/vbwd-plugin-subscription
           path: vbwd-backend/plugins/subscription
 
+      # ── 2c. Clone cms peer (catalogue = CMS posts; tests import plugins.cms and
+      #        read plugins/cms/docs/imports/widgets/ghrm-categories.json) ──
+      - name: Clone cms dependency
+        uses: actions/checkout@v4
+        with:
+          repository: VBWD-platform/vbwd-plugin-cms
+          path: vbwd-backend/plugins/cms
+
       # ── 3. Style checks (black · flake8 · mypy) ───────────────────────────
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
