@@ -254,8 +254,54 @@ class GithubAccessService:
         memberships = self._membership_repo.find_by_user(user_id)
         result = access.to_dict()
         result["connected"] = True
-        result["memberships"] = [membership.to_dict() for membership in memberships]
+        result["memberships"] = [
+            self._membership_view(membership) for membership in memberships
+        ]
         return result
+
+    def _membership_view(self, membership: Any) -> Dict[str, Any]:
+        """``membership.to_dict()`` enriched with the repos/team the user can clone.
+
+        Every membership self-describes its GitHub targets so the fe can render a
+        repo link + clone guidance without a second (fragile) per-package fetch:
+        - ``access_kind`` — the package's grant model ("repo" | "team").
+        - ``repos`` — for repo/bundle kind, the authoritative ``repo_targets()``
+          list (bundle-aware; correct even when ``repo_grants`` is empty), each
+          with a ``github_url``. Empty for team kind.
+        - ``team`` — for team kind, ``{org, slug, url}``; ``None`` for repo kind.
+        """
+        data = membership.to_dict()
+        package = self._resolve_package(membership)
+        access_kind = getattr(package, "access_kind", "repo") or "repo"
+        data["access_kind"] = access_kind
+        if package is not None and access_kind == "team":
+            org = package.github_org
+            slug = package.github_team_slug
+            data["repos"] = []
+            data["team"] = (
+                {
+                    "org": org,
+                    "slug": slug,
+                    "url": f"https://github.com/orgs/{org}/teams/{slug}",
+                }
+                if org and slug
+                else None
+            )
+        else:
+            data["repos"] = (
+                [
+                    {
+                        "owner": owner,
+                        "repo": repo,
+                        "github_url": f"https://github.com/{owner}/{repo}",
+                    }
+                    for owner, repo in package.repo_targets()
+                ]
+                if package is not None
+                else []
+            )
+            data["team"] = None
+        return data
 
     # ------------------------------------------------------------------ #
     # Private helpers                                                      #

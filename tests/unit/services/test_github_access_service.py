@@ -79,6 +79,11 @@ def _make_package(pkg_id="pkg-1", slug="my-pkg", owner="acme", repo="my-repo"):
     pkg.collaborator_permission = "pull"
     pkg.package_kind = "single"
     pkg.bundle_repos = []
+    # S132 access model: default to the per-repo collaborator kind so the fake
+    # obeys the production contract (Liskov). Team-kind fakes set these three.
+    pkg.access_kind = "repo"
+    pkg.github_org = None
+    pkg.github_team_slug = None
     # Honour the S59 repo_targets() seam so single packages resolve to their one
     # representative repo (the fake obeys the production contract — Liskov).
     pkg.repo_targets.return_value = [(owner, repo)]
@@ -764,6 +769,7 @@ class TestGetAccessStatus:
 
         membership = MagicMock()
         membership.to_dict.return_value = {"package_slug": "my-pkg", "status": "active"}
+        membership.package = _make_package(slug="my-pkg", owner="acme", repo="my-repo")
         membership_repo = MagicMock()
         membership_repo.find_by_user.return_value = [membership]
 
@@ -771,7 +777,70 @@ class TestGetAccessStatus:
         result = svc.get_access_status("user-1")
 
         assert result["connected"] is True
-        assert result["memberships"] == [{"package_slug": "my-pkg", "status": "active"}]
+        row = result["memberships"][0]
+        assert row["package_slug"] == "my-pkg"
+        assert row["status"] == "active"
+        # S? enrichment: every membership self-describes its clone targets.
+        assert row["access_kind"] == "repo"
+        assert row["repos"] == [
+            {
+                "owner": "acme",
+                "repo": "my-repo",
+                "github_url": "https://github.com/acme/my-repo",
+            }
+        ]
+        assert row["team"] is None
+
+    def test_bundle_membership_lists_every_repo_with_github_url(self):
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+
+        bundle = _make_package(slug="bundle-pkg")
+        bundle.package_kind = "bundle"
+        bundle.repo_targets.return_value = [("acme", "one"), ("acme", "two")]
+        membership = MagicMock()
+        membership.to_dict.return_value = {
+            "package_slug": "bundle-pkg",
+            "status": "active",
+        }
+        membership.package = bundle
+        membership_repo = MagicMock()
+        membership_repo.find_by_user.return_value = [membership]
+
+        svc = _make_service(access_repo=access_repo, membership_repo=membership_repo)
+        row = svc.get_access_status("user-1")["memberships"][0]
+        assert [r["repo"] for r in row["repos"]] == ["one", "two"]
+        assert row["repos"][0]["github_url"] == "https://github.com/acme/one"
+        assert row["team"] is None
+
+    def test_team_membership_exposes_team_link_no_repos(self):
+        access = _make_access()
+        access_repo = MagicMock()
+        access_repo.find_by_user_id.return_value = access
+
+        team_pkg = _make_package(slug="team-pkg")
+        team_pkg.access_kind = "team"
+        team_pkg.github_org = "VBWD-platform"
+        team_pkg.github_team_slug = "vbwd-dev"
+        membership = MagicMock()
+        membership.to_dict.return_value = {
+            "package_slug": "team-pkg",
+            "status": "active",
+        }
+        membership.package = team_pkg
+        membership_repo = MagicMock()
+        membership_repo.find_by_user.return_value = [membership]
+
+        svc = _make_service(access_repo=access_repo, membership_repo=membership_repo)
+        row = svc.get_access_status("user-1")["memberships"][0]
+        assert row["access_kind"] == "team"
+        assert row["repos"] == []
+        assert row["team"] == {
+            "org": "VBWD-platform",
+            "slug": "vbwd-dev",
+            "url": "https://github.com/orgs/VBWD-platform/teams/vbwd-dev",
+        }
 
     def test_not_connected_returns_none(self):
         access_repo = MagicMock()
