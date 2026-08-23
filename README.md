@@ -337,3 +337,12 @@ Default: **7 days**. Set to `0` to revoke immediately on cancellation.
 | 🛠 Frontend (admin) | [vbwd-fe-admin-plugin-ghrm](https://github.com/VBWD-platform/vbwd-fe-admin-plugin-ghrm) |
 
 **Core:** [vbwd-backend](https://github.com/VBWD-platform/vbwd-backend)
+
+## Documentation
+
+Full platform documentation lives at **[vbwd.cc/docs](https://vbwd.cc/docs)**.
+
+- [Plugin system](https://vbwd.cc/docs-plugin-system) — how backend plugins are registered, enabled, and configured
+- [GHRM](https://vbwd.cc/docs-core-ghrm) — documentation for this plugin's domain
+- [Architecture](https://vbwd.cc/docs-architecture) — platform layering and the core-agnosticism rule
+- [Getting started](https://vbwd.cc/docs-getting-started) — install a VBWD instance and enable plugins
