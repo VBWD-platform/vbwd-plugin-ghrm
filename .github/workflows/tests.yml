@@ -42,6 +42,32 @@ jobs:
           repository: VBWD-platform/vbwd-plugin-cms
           path: vbwd-backend/plugins/cms
 
+      # ── 2d. Clone email (subscription declares dependencies=["email"]) ────
+      # Without it PluginManager refuses to enable subscription — "Cannot
+      # enable 'subscription': dependency 'email' is not enabled" — so ghrm
+      # (which depends on subscription) never enables either, its blueprint
+      # never mounts, and every ghrm route test asserts against 404.
+      - name: Clone email dependency
+        uses: actions/checkout@v4
+        with:
+          repository: VBWD-platform/vbwd-plugin-email
+          path: vbwd-backend/plugins/email
+
+      # ── 2e. Fail fast if the clone-set has drifted from what plugins declare ──
+      # Reads PluginMetadata.dependencies over every plugin present (so the
+      # transitive closure). A missing peer here would otherwise surface only
+      # as dozens of opaque 404s in the test steps. Runtime deps only, no
+      # `--for ghrm`: that would also demand marketplace, which ghrm soft-imports
+      # on purpose and which is private (not clonable here).
+      - name: Verify declared plugin dependencies are checked out
+        working-directory: vbwd-backend
+        run: |
+          missing="$(python3 ci/missing_plugin_deps.py)"
+          if [ -n "$missing" ]; then
+            echo "::error::peer plugins declared but not cloned: $(echo $missing)"
+            exit 1
+          fi
+
       # ── 3. Style checks (black · flake8 · mypy) ───────────────────────────
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -84,6 +110,16 @@ jobs:
             echo "No src/ directory — skipping mypy."
           fi
 
+      # ── 3b. Enable every cloned plugin BEFORE anything boots ──────────────
+      # plugins/plugins.json is gitignored, so a fresh checkout has none and the
+      # app falls back to plugins.json.dist, which lists neither subscription
+      # nor ghrm. Writing the manifest up front (keyed by PluginMetadata.name)
+      # means the api and the `test` container both boot with the cloned set
+      # enabled, in dependency order.
+      - name: Create plugins.json (enable all present plugins)
+        working-directory: vbwd-backend
+        run: python3 ci/write_plugins_manifest.py
+
       # ── 4. Start docker compose stack (API + postgres + redis) ────────────
       - name: Start services
         working-directory: vbwd-backend
@@ -92,23 +128,25 @@ jobs:
       # ── 5. Install and activate plugin ────────────────────────────────────
       - name: Enable all present plugins
         working-directory: vbwd-backend
-        # Two passes: a plugin whose declared dependency sorts AFTER it
-        # alphabetically (e.g. ghrm depends on subscription) fails to enable on
-        # the first pass because the dependency is not yet enabled. The second
-        # pass enables it once the dependency is up. enable is idempotent.
+        # Belt and braces on top of the manifest written above. Enable by
+        # PluginMetadata.name, not directory (they can differ, and a directory
+        # key is silently ignored by the loader). Two passes: ghrm sorts before
+        # its dependency subscription, so it can only enable on the second pass
+        # if the manifest did not already enable it. enable is idempotent. The
+        # exclude list still matches on the directory. `exec` reads stdin, so it
+        # gets </dev/null or it would swallow the rest of the plugin list.
         run: |
           EXCLUDE_FILE="ci/plugins-enable-exclude.txt"
           for pass in 1 2; do
-            for d in plugins/*/; do
-              name=$(basename "$d")
-              [ -f "${d}__init__.py" ] || continue
-              if [ -f "$EXCLUDE_FILE" ] && grep -qxF "$name" "$EXCLUDE_FILE"; then
-                echo "Skipping CI-excluded plugin: $name"; continue
+            while IFS=$'\t' read -r dir name; do
+              [ -n "$dir" ] || continue
+              if [ -f "$EXCLUDE_FILE" ] && grep -qxF "$dir" "$EXCLUDE_FILE"; then
+                echo "Skipping CI-excluded plugin: $dir"; continue
               fi
-              docker compose exec -T api flask --app "vbwd:create_app()" plugins enable "$name" \
+              docker compose exec -T api flask --app "vbwd:create_app()" plugins enable "$name" </dev/null \
                 && echo "Plugin $name enabled (pass $pass)." \
                 || echo "Plugin $name already enabled or not registerable — continuing."
-            done
+            done < <(python3 ci/plugin_names.py)
           done
       - name: Run unit tests
         working-directory: vbwd-backend
