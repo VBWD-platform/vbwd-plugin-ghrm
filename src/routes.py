@@ -106,6 +106,10 @@ ghrm_bp = Blueprint("ghrm", __name__)
 # is written, and forcing decryption on a plaintext key would corrupt the read.
 _PEM_NAMESPACE = "secrets"
 
+# The operator-configurable catalogue page slug, which is also the fe-user
+# catalogue base (``/<slug>``, ``/<slug>/<package>``).
+CATALOGUE_PAGE_SLUG_KEY = "software_catalogue_cms_page_slug"
+
 
 # ─── Dependency factories ────────────────────────────────────────────────────
 
@@ -252,6 +256,18 @@ def _load_config_json_fallback() -> dict:
         return {}
 
 
+def resolve_catalogue_page_slug(config: dict) -> str:
+    """The catalogue page slug (= the fe-user catalogue base) from ``config``.
+
+    The live plugin config wins; the bundled ``config.json`` is the default.
+    The single home of this lookup — the slug is operator-configurable, so no
+    caller may hardcode it.
+    """
+    return config.get(CATALOGUE_PAGE_SLUG_KEY) or _load_config_json_fallback().get(
+        CATALOGUE_PAGE_SLUG_KEY, "ghrm-software-catalogue"
+    )
+
+
 def _resolve_catalogue_and_categories() -> tuple:
     """Resolve the catalogue page slug and configured category slugs.
 
@@ -260,9 +276,7 @@ def _resolve_catalogue_and_categories() -> tuple:
     """
     cfg = _cfg()
     fallback = _load_config_json_fallback()
-    catalogue_slug = cfg.get("software_catalogue_cms_page_slug") or fallback.get(
-        "software_catalogue_cms_page_slug", "ghrm-software-catalogue"
-    )
+    catalogue_slug = resolve_catalogue_page_slug(cfg)
     category_slugs = cfg.get("software_category_slugs") or fallback.get(
         "software_category_slugs", []
     )
@@ -312,9 +326,7 @@ def get_public_config():
             return {}
 
     fb = _fallback_cfg()
-    catalogue_slug = cfg.get("software_catalogue_cms_page_slug") or fb.get(
-        "software_catalogue_cms_page_slug", "ghrm-software-catalogue"
-    )
+    catalogue_slug = resolve_catalogue_page_slug(cfg)
     detail_slug = cfg.get("software_detail_cms_page_slug") or fb.get(
         "software_detail_cms_page_slug", "ghrm-software-detail"
     )

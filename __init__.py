@@ -1,5 +1,5 @@
 """GHRM — GitHub Repo Manager plugin."""
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 from vbwd.plugins.base import BasePlugin, PluginMetadata, PublicRouteDeclaration
 
 if TYPE_CHECKING:
@@ -31,6 +31,11 @@ DEFAULT_CONFIG = {
     # Off by default so a classic install (admin-only packages) is unchanged.
     "marketplace_enabled": False,
 }
+
+
+# fe-user ghrm mounts its GitHub OAuth callback under this prefix
+# (``/ghrm/auth/github/callback``).
+GITHUB_AUTH_CALLBACK_ROUTE_PREFIX = "/ghrm"
 
 
 class _SubscriptionEntitlementsAdapter:
@@ -97,6 +102,23 @@ class GhrmPlugin(BasePlugin):
                 "/api/v1/ghrm/sync": "GHRM CI sync trigger; authenticated by an API key validated inside the handler.",
             },
         )
+
+    def fe_user_route_prefixes(self) -> List[str]:
+        """The public routes fe-user ghrm mounts (S154 D9): the GitHub auth callback
+        and the catalogue base, read from the live config on every call.
+
+        The base (``software_catalogue_cms_page_slug``) is operator-configurable,
+        so it is never hardcoded. A server-side renderer that hands unknown paths
+        back to the SPA can discover this method by shape; ghrm imports none of
+        it and behaves the same with no such renderer installed.
+        """
+        from plugins.ghrm.src.routes import resolve_catalogue_page_slug
+
+        catalogue_base = resolve_catalogue_page_slug(self._config or {}).strip("/")
+        prefixes = [GITHUB_AUTH_CALLBACK_ROUTE_PREFIX]
+        if catalogue_base:
+            prefixes.append(f"/{catalogue_base}")
+        return prefixes
 
     def get_blueprint(self) -> Optional["Blueprint"]:
         from plugins.ghrm.src.routes import ghrm_bp
