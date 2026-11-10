@@ -20,12 +20,14 @@ overengineering. Quality guard: ``bin/pre-commit-check.sh --plugin ghrm --full``
 """
 from unittest.mock import patch
 
+from plugins.ghrm.tests.unit.live_config_app import app_with_saved_config
+
 
 def _build_resolver_with(config: dict, fallback: dict):
-    """Build the resolver with ``_cfg`` / config.json fallback stubbed."""
+    """Build the resolver with the saved (live) config and config.json stubbed."""
     from plugins.ghrm.src import routes
 
-    with patch.object(routes, "_cfg", return_value=config), patch.object(
+    with app_with_saved_config(config).app_context(), patch.object(
         routes, "_load_config_json_fallback", return_value=fallback
     ):
         return routes._build_public_detail_path_resolver()

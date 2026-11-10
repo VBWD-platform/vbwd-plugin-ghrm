@@ -12,5 +12,7 @@
   "allow_extensive_github_permissions": false,
   "github_org": "",
   "default_access_kind": "repo",
-  "marketplace_enabled": false
+  "marketplace_enabled": false,
+  "seo_index_packages": true,
+  "seo_index_categories": false
 }

@@ -1,11 +1,11 @@
 """GHRM — GitHub Repo Manager plugin."""
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+from typing import Optional, Dict, Any, List, Tuple, TYPE_CHECKING
 from vbwd.plugins.base import BasePlugin, PluginMetadata, PublicRouteDeclaration
 
 if TYPE_CHECKING:
     from flask import Blueprint
 
-DEFAULT_CONFIG = {
+DEFAULT_CONFIG: Dict[str, Any] = {
     "github_app_id": "",
     # Externally provisioned (ops-placed, read-only) GitHub App RSA key. Read via
     # the core FilesystemManager (secrets perms posture + path confinement, S58.4).
@@ -30,6 +30,9 @@ DEFAULT_CONFIG = {
     # Vendor-mode (marketplace): gates the self-service vendor package route.
     # Off by default so a classic install (admin-only packages) is unchanged.
     "marketplace_enabled": False,
+    # S154 D7 — fe-admin "indexable" switches for cms's sitemap (read live).
+    "seo_index_packages": True,
+    "seo_index_categories": False,
 }
 
 
@@ -62,6 +65,11 @@ class GhrmPlugin(BasePlugin):
     Class MUST be defined in __init__.py (not re-exported) due to
     discovery check obj.__module__ != full_module in manager.py.
     """
+
+    # The cms registry + providers this instance registered (S154), so
+    # ``on_disable`` removes exactly those without re-importing cms.
+    _sitemap_registry: Any = None
+    _sitemap_providers: Tuple[Any, ...] = ()
 
     @property
     def metadata(self) -> PluginMetadata:
@@ -105,16 +113,17 @@ class GhrmPlugin(BasePlugin):
 
     def fe_user_route_prefixes(self) -> List[str]:
         """The public routes fe-user ghrm mounts (S154 D9): the GitHub auth callback
-        and the catalogue base, read from the live config on every call.
+        and the catalogue base, read from the live config store on every call
+        (never the in-memory ``_config``, which an admin save does not update).
 
         The base (``software_catalogue_cms_page_slug``) is operator-configurable,
         so it is never hardcoded. A server-side renderer that hands unknown paths
         back to the SPA can discover this method by shape; ghrm imports none of
         it and behaves the same with no such renderer installed.
         """
-        from plugins.ghrm.src.routes import resolve_catalogue_page_slug
+        from plugins.ghrm.src.services.plugin_config import live_catalogue_base
 
-        catalogue_base = resolve_catalogue_page_slug(self._config or {}).strip("/")
+        catalogue_base = live_catalogue_base().strip("/")
         prefixes = [GITHUB_AUTH_CALLBACK_ROUTE_PREFIX]
         if catalogue_base:
             prefixes.append(f"/{catalogue_base}")
@@ -163,6 +172,52 @@ class GhrmPlugin(BasePlugin):
             logging.getLogger(__name__).warning(
                 "[ghrm] Failed to register data exchangers: %s", exchanger_error
             )
+
+    @staticmethod
+    def _import_cms_sitemap_registry() -> Any:
+        """cms's sitemap registry module (raises ``ImportError`` without cms)."""
+        from plugins.cms.src.services import seo_registry
+
+        return seo_registry
+
+    def _register_sitemap_providers(self) -> None:
+        """S154 P2 — contribute ghrm's sitemap providers when cms is installed.
+
+        cms is optional (D3). The registry is cms-owned and only cms's own
+        sitemap routes read it, so registering while cms is installed but not
+        (yet) enabled is harmless and independent of plugin enable order.
+        Without cms importable this is a no-op and ghrm still enables.
+        Registration is idempotent by provider name (re-enable replaces).
+        """
+        import logging
+
+        try:
+            sitemap_registry = self._import_cms_sitemap_registry()
+        except ImportError as cms_import_error:
+            logging.getLogger(__name__).warning(
+                "[ghrm] Sitemap providers not registered (cms absent?): %s",
+                cms_import_error,
+            )
+            return
+
+        from vbwd.extensions import db
+        from plugins.ghrm.src.sitemap_providers import build_sitemap_providers
+
+        self._sitemap_providers = tuple(
+            build_sitemap_providers(lambda: db.session, sitemap_registry.SitemapEntry)
+        )
+        for provider in self._sitemap_providers:
+            sitemap_registry.register_sitemap_provider(provider)
+        self._sitemap_registry = sitemap_registry
+
+    def _unregister_sitemap_providers(self) -> None:
+        """Mirror of ``_register_sitemap_providers`` (no-op if none registered)."""
+        if self._sitemap_registry is None:
+            return
+        for provider in self._sitemap_providers:
+            self._sitemap_registry.unregister_sitemap_provider(provider)
+        self._sitemap_registry = None
+        self._sitemap_providers = ()
 
     def on_enable(self) -> None:
         self._register_data_exchangers()
@@ -233,6 +288,9 @@ class GhrmPlugin(BasePlugin):
             marketplace_listings_registry.register_vendor_listings_provider(
                 GHRM_LISTING_TYPE_ID, vendor_listings_provider
             )
+
+        # S154 P2 — packages + categories in cms's sitemap (cms optional, D3).
+        self._register_sitemap_providers()
 
     def _make_access_service(self):
         """Composition root for GithubAccessService.
@@ -338,6 +396,8 @@ class GhrmPlugin(BasePlugin):
         from vbwd.services.search import search_provider_registry
 
         search_provider_registry.unregister("ghrm_package")
+
+        self._unregister_sitemap_providers()
 
         # Mirror of the on_enable registration — guarded soft import so the
         # source stays marketplace-free and disable is safe when absent.

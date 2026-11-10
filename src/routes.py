@@ -60,7 +60,12 @@ from vbwd.middleware.auth import (
     require_user_permission,
 )
 
-from plugins.ghrm.src.services.plugin_config import marketplace_enabled
+from plugins.ghrm.src.services.plugin_config import (
+    ghrm_config,
+    live_catalogue_base,
+    marketplace_enabled,
+    shown_category_slugs,
+)
 
 from plugins.ghrm.src.repositories.software_package_repository import (
     GhrmSoftwarePackageRepository,
@@ -268,30 +273,16 @@ def resolve_catalogue_page_slug(config: dict) -> str:
     )
 
 
-def _resolve_catalogue_and_categories() -> tuple:
-    """Resolve the catalogue page slug and configured category slugs.
-
-    DB plugin config wins; the bundled ``config.json`` provides the defaults
-    (mirrors ``get_public_config`` / ``list_categories``).
-    """
-    cfg = _cfg()
-    fallback = _load_config_json_fallback()
-    catalogue_slug = resolve_catalogue_page_slug(cfg)
-    category_slugs = cfg.get("software_category_slugs") or fallback.get(
-        "software_category_slugs", []
-    )
-    return catalogue_slug, category_slugs
-
-
 def _build_public_detail_path_resolver():
     """Return ``package_dict -> "/<catalogue_slug>/<package_slug>"`` (flattened).
 
     S127 flattened the catalogue to ONE page with in-widget filters, so a
     package's fe-user detail page is ``/<catalogue_slug>/<package_slug>`` (fetched
     by slug). There is no category segment and no plan→category reverse map: every
-    package always gets a path, regardless of its plan's categorization.
+    package always gets a path, regardless of its plan's categorization. The
+    base is read from the LIVE config (S154 D9), the same as the SPA and sitemap.
     """
-    catalogue_slug, _category_slugs = _resolve_catalogue_and_categories()
+    catalogue_slug = live_catalogue_base()
 
     def _resolve(package_dict: dict) -> str:
         return f"/{catalogue_slug}/{package_dict['slug']}"
@@ -311,28 +302,21 @@ def _admin_package_dict(package, resolve_public_detail_path) -> dict:
 
 @ghrm_bp.route("/api/v1/ghrm/config", methods=["GET"])
 def get_public_config():
-    """Return public GHRM config needed by the frontend (layout slugs, etc.)."""
-    import json as _json  # noqa: E401
-    import os as _os
+    """Return public GHRM config needed by the frontend (layout slugs, etc.).
 
-    cfg = _cfg()
-
-    def _fallback_cfg():
-        path = _os.path.join(_os.path.dirname(__file__), "..", "config.json")
-        try:
-            with open(path) as f:
-                return _json.load(f)
-        except Exception:
-            return {}
-
-    fb = _fallback_cfg()
-    catalogue_slug = resolve_catalogue_page_slug(cfg)
-    detail_slug = cfg.get("software_detail_cms_page_slug") or fb.get(
+    The page slugs (the SPA's route base) come from the LIVE config (S154 D9), so
+    the SPA, the theme hand-off and the sitemap agree right after an admin edit.
+    """
+    catalogue_slug = live_catalogue_base()
+    detail_slug = ghrm_config().get(
+        "software_detail_cms_page_slug"
+    ) or _load_config_json_fallback().get(
         "software_detail_cms_page_slug", "ghrm-software-detail"
     )
     # D3 security policy: exposed so fe-admin can decide whether to offer the
     # Write/Maintain/Admin access-level options. Defaults to False (Read only).
-    allow_extensive = bool(cfg.get("allow_extensive_github_permissions", False))
+    # Read from the same source as the grant/validation sites that enforce it.
+    allow_extensive = bool(_cfg().get("allow_extensive_github_permissions", False))
     return jsonify(
         {
             "catalogue_page_slug": catalogue_slug,
@@ -344,23 +328,16 @@ def get_public_config():
 
 @ghrm_bp.route("/api/v1/ghrm/categories", methods=["GET"])
 def list_categories():
-    """Return the configured software category slugs and their DB names as labels."""
-    import json as _json  # noqa: E401
-    import os as _os
+    """Return the shown software category slugs and their DB names as labels.
+
+    The slugs come from the LIVE config (S154 D9), the same list the sitemap's
+    category provider walks.
+    """
     from plugins.subscription.subscription.services.catalog_read_model import (
         CatalogReadModel,
     )
 
-    cfg = _cfg()
-    slugs = cfg.get("software_category_slugs") or []
-    # Fall back to config.json defaults when DB config is empty
-    if not slugs:
-        _cfg_path = _os.path.join(_os.path.dirname(__file__), "..", "config.json")
-        try:
-            with open(_cfg_path) as _f:
-                slugs = _json.load(_f).get("software_category_slugs", [])
-        except Exception:
-            slugs = []
+    slugs = shown_category_slugs()
     # Look up real names via the subscription-owned catalog read model
     # (ghrm declares dependencies=["subscription"]); fall back to a
     # slug-derived title when a category is unknown.

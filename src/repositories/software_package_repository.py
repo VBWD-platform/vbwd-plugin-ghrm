@@ -1,5 +1,6 @@
 """GhrmSoftwarePackageRepository — data access for software packages."""
-from typing import Optional, List, Dict, Any
+from datetime import datetime
+from typing import Optional, List, Dict, Any, Tuple
 from uuid import UUID
 from plugins.ghrm.src.models.ghrm_software_package import GhrmSoftwarePackage
 from vbwd.extensions import db
@@ -61,6 +62,33 @@ class GhrmSoftwarePackageRepository:
             query = query.filter(GhrmSoftwarePackage.tariff_plan_id.in_(plan_ids))
         rows = query.all()
         return [row[0] for row in rows]
+
+    def count_active(self) -> int:
+        """How many ACTIVE packages the public catalogue lists (sitemap ``count()``)."""
+        return (
+            self.session.query(GhrmSoftwarePackage)
+            .filter(GhrmSoftwarePackage.is_active.is_(True))
+            .count()
+        )
+
+    def list_active_sitemap_rows(
+        self, offset: int, limit: int
+    ) -> List[Tuple[str, Optional[datetime]]]:
+        """``(slug, updated_at)`` of ACTIVE packages, one stable ``id``-ordered page.
+
+        Selects the two columns only, so a sitemap chunk never builds package
+        entities. Same filter as :meth:`count_active`.
+        """
+        return [
+            (slug, updated_at)
+            for slug, updated_at in self.session.query(
+                GhrmSoftwarePackage.slug, GhrmSoftwarePackage.updated_at
+            )
+            .filter(GhrmSoftwarePackage.is_active.is_(True))
+            .order_by(GhrmSoftwarePackage.id)
+            .offset(offset)
+            .limit(limit)
+        ]
 
     def list_package_prices(self, plan_ids: List[UUID]) -> Dict[str, Dict[str, Any]]:
         """Price blocks for many tariff plans in ONE call, keyed by str(plan_id).

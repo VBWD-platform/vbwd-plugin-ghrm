@@ -14,6 +14,7 @@ import pytest
 from flask import Flask
 
 from plugins.ghrm.src.routes import ghrm_bp
+from plugins.ghrm.tests.unit.live_config_app import app_with_saved_config
 
 
 def _make_app():
@@ -30,20 +31,17 @@ def app():
 
 
 class TestCategoriesRouteUsesSubscriptionCatalog:
-    def test_labels_resolved_via_subscription_catalog_read_model(self, app):
+    def test_labels_resolved_via_subscription_catalog_read_model(self):
         fake_catalog = MagicMock()
         fake_catalog.category_labels_by_slugs.return_value = {"backend": "Backend"}
+        app = app_with_saved_config({"software_category_slugs": ["backend", "fe-user"]})
         with app.test_client() as client:
             with patch(
-                "plugins.ghrm.src.routes._cfg",
-                return_value={"software_category_slugs": ["backend", "fe-user"]},
+                "plugins.subscription.subscription.services."
+                "catalog_read_model.CatalogReadModel",
+                return_value=fake_catalog,
             ):
-                with patch(
-                    "plugins.subscription.subscription.services."
-                    "catalog_read_model.CatalogReadModel",
-                    return_value=fake_catalog,
-                ):
-                    response = client.get("/api/v1/ghrm/categories")
+                response = client.get("/api/v1/ghrm/categories")
 
         assert response.status_code == 200
         fake_catalog.category_labels_by_slugs.assert_called_once_with(

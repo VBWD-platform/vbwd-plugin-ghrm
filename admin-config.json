@@ -110,6 +110,24 @@
           "description": "Off by default. When on, a user holding the marketplace.vendor permission can create a software package sold as a subscription via POST /api/v1/ghrm/vendor/packages. The package is linked to a plan the vendor owns (vendor_id), so a purchase attributes the sale to the vendor automatically."
         }
       ]
+    },
+    {
+      "id": "indexing",
+      "label": "Indexing",
+      "fields": [
+        {
+          "key": "seo_index_packages",
+          "label": "Index software packages",
+          "component": "checkbox",
+          "description": "On by default. Lists every active package at /<catalogue page slug>/<package slug> in the sitemap (sitemap-ghrm-packages-<n>.xml). Needs the cms plugin."
+        },
+        {
+          "key": "seo_index_categories",
+          "label": "Index software categories",
+          "component": "checkbox",
+          "description": "Off by default. Lists every software category at /<catalogue page slug>/category/<category slug> in the sitemap (sitemap-ghrm-categories-<n>.xml). Needs the cms plugin."
+        }
+      ]
     }
   ]
 }
