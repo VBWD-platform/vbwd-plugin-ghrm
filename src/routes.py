@@ -95,6 +95,7 @@ from plugins.ghrm.src.services.github_access_service import (
 )
 from plugins.ghrm.src.services.github_app_client import IGithubAppClient
 from plugins.ghrm.src.services.github_app_client_real import GithubAppClientError
+from plugins.ghrm.src.services.seo_indexnow import notify_package_changed
 from plugins.ghrm.src.models.ghrm_software_package import (
     GhrmSoftwarePackage,
     DEFAULT_PACKAGE_KIND,
@@ -809,6 +810,7 @@ def vendor_create_package():
     for attribute, value in content_fields.items():
         setattr(package, attribute, value)
     package_repo.save(package)
+    notify_package_changed(package.slug)
 
     return jsonify({"package": package.to_dict()}), 201
 
@@ -952,6 +954,7 @@ def vendor_update_package(package_id):
     plan_repo.save(plan)
     invalidate_plan_cache()
     GhrmSoftwarePackageRepository(db.session).save(package)
+    notify_package_changed(package.slug)
 
     return jsonify({"package": _vendor_package_dict(package, plan)})
 
@@ -977,9 +980,11 @@ def vendor_delete_package(package_id):
     if error is not None:
         return error
 
+    package_slug = package.slug
     GhrmSoftwarePackageRepository(db.session).delete(package.id)
     TarifPlanRepository(db.session).delete(plan.id)
     invalidate_plan_cache()
+    notify_package_changed(package_slug)
 
     return jsonify({"success": True})
 
@@ -1180,6 +1185,7 @@ def admin_create_package():
         github_team_slug=github_team_slug,
     )
     repo.save(pkg)
+    notify_package_changed(pkg.slug)
     return (
         jsonify(_admin_package_dict(pkg, _build_public_detail_path_resolver())),
         201,
@@ -1307,6 +1313,7 @@ def admin_update_package(pkg_id):
                     setattr(sync, field, body[field])
             sync_repo.save(sync)
     repo.save(pkg)
+    notify_package_changed(pkg.slug)
     return jsonify(_admin_package_dict(pkg, _build_public_detail_path_resolver()))
 
 
@@ -1329,8 +1336,12 @@ def admin_get_package(pkg_id):
 @require_permission("ghrm.packages.manage")
 def admin_delete_package(pkg_id):
     repo = GhrmSoftwarePackageRepository(db.session)
-    if not repo.delete(pkg_id):
+    pkg = repo.find_by_id(pkg_id)
+    if not pkg:
         return jsonify({"error": "Not found"}), 404
+    package_slug = pkg.slug
+    repo.delete(pkg_id)
+    notify_package_changed(package_slug)
     return jsonify({"ok": True})
 
 
